@@ -1,0 +1,80 @@
+.sidebar {
+  background: #0f172a;
+  color: #e5e7eb;
+  min-height: 100vh;
+  padding: 20px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.sidebar__brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sidebar__logo {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #22d3ee, #2563eb);
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  color: #0b1221;
+}
+
+.sidebar__title {
+  font-weight: 700;
+}
+
+.sidebar__subtitle {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.sidebar__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sidebar__link {
+  padding: 10px 12px;
+  border-radius: 10px;
+  color: #e5e7eb;
+  font-weight: 600;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.sidebar__link:hover {
+  background: rgba(255, 255, 255, 0.06);
+  transform: translateY(-1px);
+}
+
+.sidebar__link.is-active {
+  background: rgba(59, 130, 246, 0.16);
+  color: #bfdbfe;
+  border: 1px solid rgba(59, 130, 246, 0.35);
+}
+
+.sidebar__foot {
+  margin-top: auto;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+}
+
+.sidebar__foot-title {
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.sidebar__foot-text {
+  margin: 0;
+  color: #cbd5e1;
+  font-size: 12px;
+  line-height: 1.5;
+}
+

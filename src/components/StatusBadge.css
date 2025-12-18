@@ -1,0 +1,35 @@
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid transparent;
+}
+
+.status-green {
+  color: #166534;
+  background: #ecfdf3;
+  border-color: #bbf7d0;
+}
+
+.status-blue {
+  color: #1d4ed8;
+  background: #e0e7ff;
+  border-color: #c7d2fe;
+}
+
+.status-amber {
+  color: #92400e;
+  background: #fffbeb;
+  border-color: #fef3c7;
+}
+
+.status-gray {
+  color: #374151;
+  background: #f3f4f6;
+  border-color: #e5e7eb;
+}
+

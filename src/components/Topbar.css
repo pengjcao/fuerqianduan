@@ -1,0 +1,28 @@
+.topbar {
+  background: #ffffff;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.topbar__title {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.topbar__subtitle {
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.topbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
