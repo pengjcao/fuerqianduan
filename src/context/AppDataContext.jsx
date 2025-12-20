@@ -1,5 +1,5 @@
 import { createContext, useEffect, useMemo, useState } from 'react';
-import { piRecordApi, specialtyApi } from '../api';
+import { piRecordApi, departmentApi } from '../api';
 
 export const AppDataContext = createContext(null);
 
@@ -26,16 +26,11 @@ export function AppDataProvider({ children }) {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [piRes, specialtyRes] = await Promise.all([
-          piRecordApi.getList(),
-          specialtyApi.getList(),
-        ]);
+        // 获取待审核 PI 列表
+        const piRes = await piRecordApi.getPendingList();
         
         if (piRes.success) {
           setPiRecords(piRes.data || []);
-        }
-        if (specialtyRes.success) {
-          setSpecialties(specialtyRes.data || []);
         }
       } catch (error) {
         console.error("Failed to fetch data:", error);
@@ -78,32 +73,37 @@ export function AppDataProvider({ children }) {
     setTrials((prev) => [next, ...prev]);
   };
 
-  const addPiRecord = async (payload) => {
+  // 提交 PI 信息（使用 FormData）
+  const addPiRecord = async (formData) => {
     try {
-      const response = await piRecordApi.create(payload);
-      if (response.success && response.data) {
-        setPiRecords((prev) => [response.data, ...prev]);
+      const response = await piRecordApi.submitPiInfo(formData);
+      if (response.success) {
+        // 刷新列表
+        await refreshPiRecords();
         return response.data;
       }
-      throw new Error(response.message || "创建失败");
+      throw new Error(response.message || "提交失败");
     } catch (error) {
-      console.error("Failed to create PI record:", error);
+      console.error("Failed to submit PI info:", error);
       throw error;
     }
   };
 
+  // 审批 PI（approve: true=通过, false=驳回）
+  // 注意：后端接口目前可能需要 pi_info_id，但目前后端代码中硬编码为 1
+  // 如果后端需要传递 id，需要调整 API
   const progressPiRecord = async ({ id, action, comment }) => {
     try {
-      const response = await piRecordApi.update(id, action, comment);
-      if (response.success && response.data) {
-        setPiRecords((prev) =>
-          prev.map((item) => (item.id === id ? response.data : item))
-        );
+      const approve = action === "approve"; // action: "approve" | "reject"
+      const response = await piRecordApi.review(approve, comment);
+      if (response.success) {
+        // 刷新列表
+        await refreshPiRecords();
         return response.data;
       }
-      throw new Error(response.message || "更新失败");
+      throw new Error(response.message || "审批失败");
     } catch (error) {
-      console.error("Failed to update PI record:", error);
+      console.error("Failed to review PI:", error);
       throw error;
     }
   };
@@ -111,7 +111,7 @@ export function AppDataProvider({ children }) {
   // 刷新 PI 记录列表
   const refreshPiRecords = async () => {
     try {
-      const response = await piRecordApi.getList();
+      const response = await piRecordApi.getPendingList();
       if (response.success) {
         setPiRecords(response.data || []);
       }

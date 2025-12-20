@@ -66,17 +66,11 @@ export function AuthProvider({ children }) {
 
       if (token && savedUser) {
         try {
-          // 验证 token 并获取用户信息
-          const response = await authApi.getCurrentUser();
-          if (response.success && response.data) {
-            setCurrentUser(response.data);
-            localStorage.setItem("current_user", JSON.stringify(response.data));
-          } else {
-            // token 无效，清除
-            authApi.logout();
-          }
+          // 从 localStorage 恢复用户信息
+          const user = JSON.parse(savedUser);
+          setCurrentUser(user);
         } catch {
-          // token 验证失败，清除
+          // 解析失败，清除
           authApi.logout();
         }
       }
@@ -91,9 +85,26 @@ export function AuthProvider({ children }) {
       // 调试日志
       console.log("[Login] API 响应:", response);
 
-      // 响应拦截器已经返回了 data，所以 response 就是 { success: true, data: { user, token } }
+      // 响应拦截器返回格式：{ success: true, data: { id, password, token, role } }
       if (response && response.success && response.data) {
-        const { user, token } = response.data;
+        const { id, token, role } = response.data;
+        
+        // 构建用户对象，role 是数字（1=研究者, 2=机构办秘书, 3=机构办主任, 4=机构主任）
+        // 前端使用字符串角色标识，需要映射
+        const roleMap = {
+          1: "pi",
+          2: "secretary",
+          3: "director",
+          4: "chief",
+        };
+        
+        const user = {
+          id,
+          username,
+          role: roleMap[role] || "pi", // 默认为 pi
+          roleNumber: role, // 保存原始数字角色
+        };
+        
         localStorage.setItem("auth_token", token);
         localStorage.setItem("current_user", JSON.stringify(user));
         setCurrentUser(user);
@@ -109,10 +120,7 @@ export function AuthProvider({ children }) {
     } catch (error) {
       // 错误响应已经被拦截器处理，error 可能是 { success: false, message: "..." }
       console.error("[Login] 登录错误:", error);
-      const errorMessage =
-        error?.message ||
-        error?.response?.data?.message ||
-        "登录失败，请检查网络连接";
+      const errorMessage = error?.message || "登录失败，请检查网络连接";
       return {
         ok: false,
         message: errorMessage,

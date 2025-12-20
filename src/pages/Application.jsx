@@ -24,9 +24,218 @@ import {
 } from "@ant-design/icons";
 import { AppDataContext } from "../context/AppDataContext";
 import { AuthContext } from "../context/AuthContext";
+import { professionalGroupApi } from "../api";
 
 const { TextArea } = Input;
 const { Dragger } = Upload;
+
+// 备案专业名称（根据文档完整列表）
+const SPECIALTY_OPTIONS = [
+  // 一级：预防保健科
+  { value: "预防保健科", label: "预防保健科" },
+  // 一级：全科医疗科
+  { value: "全科医疗科", label: "全科医疗科" },
+  // 一级：内科
+  { value: "内科/呼吸内科专业", label: "内科 - 呼吸内科专业" },
+  { value: "内科/消化内科专业", label: "内科 - 消化内科专业" },
+  { value: "内科/神经内科专业", label: "内科 - 神经内科专业" },
+  { value: "内科/心血管内科专业", label: "内科 - 心血管内科专业" },
+  { value: "内科/血液内科专业", label: "内科 - 血液内科专业" },
+  { value: "内科/肾病学专业", label: "内科 - 肾病学专业" },
+  { value: "内科/内分泌专业", label: "内科 - 内分泌专业" },
+  { value: "内科/免疫学专业", label: "内科 - 免疫学专业" },
+  { value: "内科/变态反应专业", label: "内科 - 变态反应专业" },
+  { value: "内科/老年病专业", label: "内科 - 老年病专业" },
+  { value: "内科/其他", label: "内科 - 其他（需填写）" },
+  // 一级：外科
+  {
+    value: "外科/普通外科专业/肝脏移植项目",
+    label: "外科 - 普通外科专业 - 肝脏移植项目",
+  },
+  {
+    value: "外科/普通外科专业/胰腺移植项目",
+    label: "外科 - 普通外科专业 - 胰腺移植项目",
+  },
+  {
+    value: "外科/普通外科专业/小肠移植项目",
+    label: "外科 - 普通外科专业 - 小肠移植项目",
+  },
+  { value: "外科/神经外科专业", label: "外科 - 神经外科专业" },
+  { value: "外科/骨科专业", label: "外科 - 骨科专业" },
+  {
+    value: "外科/泌尿外科专业/肾病移植项目",
+    label: "外科 - 泌尿外科专业 - 肾病移植项目",
+  },
+  {
+    value: "外科/胸外科专业/肺脏移植项目",
+    label: "外科 - 胸外科专业 - 肺脏移植项目",
+  },
+  {
+    value: "外科/心脏大血管外科专业/心脏移植项目",
+    label: "外科 - 心脏大血管外科专业 - 心脏移植项目",
+  },
+  { value: "外科/烧伤外科专业", label: "外科 - 烧伤外科专业" },
+  { value: "外科/整形外科专业", label: "外科 - 整形外科专业" },
+  { value: "外科/其他", label: "外科 - 其他（需填写）" },
+  // 一级：妇产科
+  { value: "妇产科/妇科专业", label: "妇产科 - 妇科专业" },
+  { value: "妇产科/产科专业", label: "妇产科 - 产科专业" },
+  { value: "妇产科/计划生育专业", label: "妇产科 - 计划生育专业" },
+  { value: "妇产科/优生学专业", label: "妇产科 - 优生学专业" },
+  {
+    value: "妇产科/生殖健康与不孕症专业",
+    label: "妇产科 - 生殖健康与不孕症专业",
+  },
+  { value: "妇产科/其他", label: "妇产科 - 其他" },
+  // 一级：妇女保健科
+  { value: "妇女保健科/青春期保健专业", label: "妇女保健科 - 青春期保健专业" },
+  { value: "妇女保健科/围产期保健专业", label: "妇女保健科 - 围产期保健专业" },
+  { value: "妇女保健科/更年期保健专业", label: "妇女保健科 - 更年期保健专业" },
+  {
+    value: "妇女保健科/妇女心理卫生专业",
+    label: "妇女保健科 - 妇女心理卫生专业",
+  },
+  { value: "妇女保健科/妇女营养专业", label: "妇女保健科 - 妇女营养专业" },
+  { value: "妇女保健科/其他", label: "妇女保健科 - 其他（需填写）" },
+  // 一级：儿科
+  { value: "儿科/新生儿专业", label: "儿科 - 新生儿专业" },
+  { value: "儿科/小儿传染病专业", label: "儿科 - 小儿传染病专业" },
+  { value: "儿科/小儿消化专业", label: "儿科 - 小儿消化专业" },
+  { value: "儿科/小儿呼吸专业", label: "儿科 - 小儿呼吸专业" },
+  { value: "儿科/小儿心脏病专业", label: "儿科 - 小儿心脏病专业" },
+  { value: "儿科/小儿肾病专业", label: "儿科 - 小儿肾病专业" },
+  { value: "儿科/小儿血液病专业", label: "儿科 - 小儿血液病专业" },
+  { value: "儿科/小儿神经病学专业", label: "儿科 - 小儿神经病学专业" },
+  { value: "儿科/小儿内分泌专业", label: "儿科 - 小儿内分泌专业" },
+  { value: "儿科/小儿遗传病专业", label: "儿科 - 小儿遗传病专业" },
+  { value: "儿科/小儿免疫专业", label: "儿科 - 小儿免疫专业" },
+  { value: "儿科/其他", label: "儿科 - 其他（需填写）" },
+  // 一级：小儿外科
+  { value: "小儿外科/小儿普通外科专业", label: "小儿外科 - 小儿普通外科专业" },
+  { value: "小儿外科/小儿骨科专业", label: "小儿外科 - 小儿骨科专业" },
+  { value: "小儿外科/小儿泌尿外科专业", label: "小儿外科 - 小儿泌尿外科专业" },
+  { value: "小儿外科/小儿胸心外科专业", label: "小儿外科 - 小儿胸心外科专业" },
+  { value: "小儿外科/小儿神经外科专业", label: "小儿外科 - 小儿神经外科专业" },
+  { value: "小儿外科/其他", label: "小儿外科 - 其他（需填写）" },
+  // 一级：儿童保健科
+  { value: "儿童保健科/眼科", label: "儿童保健科 - 眼科" },
+  // 一级：耳鼻咽喉科
+  { value: "耳鼻咽喉科/耳科专业", label: "耳鼻咽喉科 - 耳科专业" },
+  { value: "耳鼻咽喉科/鼻科专业", label: "耳鼻咽喉科 - 鼻科专业" },
+  { value: "耳鼻咽喉科/咽喉科专业", label: "耳鼻咽喉科 - 咽喉科专业" },
+  { value: "耳鼻咽喉科/其他", label: "耳鼻咽喉科 - 其他" },
+  // 一级：口腔科
+  { value: "口腔科/牙体牙髓病专业", label: "口腔科 - 牙体牙髓病专业" },
+  { value: "口腔科/牙周病专业", label: "口腔科 - 牙周病专业" },
+  { value: "口腔科/口腔粘膜病专业", label: "口腔科 - 口腔粘膜病专业" },
+  { value: "口腔科/儿童口腔专业", label: "口腔科 - 儿童口腔专业" },
+  { value: "口腔科/口腔颌面外科专业", label: "口腔科 - 口腔颌面外科专业" },
+  { value: "口腔科/口腔修复专业", label: "口腔科 - 口腔修复专业" },
+  { value: "口腔科/口腔正畸专业", label: "口腔科 - 口腔正畸专业" },
+  { value: "口腔科/口腔种植专业", label: "口腔科 - 口腔种植专业" },
+  { value: "口腔科/口腔麻醉专业", label: "口腔科 - 口腔麻醉专业" },
+  {
+    value: "口腔科/口腔颌面医学影像专业",
+    label: "口腔科 - 口腔颌面医学影像专业",
+  },
+  { value: "口腔科/口腔病理专业", label: "口腔科 - 口腔病理专业" },
+  { value: "口腔科/预防口腔专业", label: "口腔科 - 预防口腔专业" },
+  { value: "口腔科/其他", label: "口腔科 - 其他（需填写）" },
+  // 一级：皮肤科
+  { value: "皮肤科/医疗美容科", label: "皮肤科 - 医疗美容科" },
+  // 一级：精神科
+  { value: "精神科/精神病专业", label: "精神科 - 精神病专业" },
+  { value: "精神科/精神卫生专业", label: "精神科 - 精神卫生专业" },
+  { value: "精神科/药物依赖专业", label: "精神科 - 药物依赖专业" },
+  { value: "精神科/精神康复专业", label: "精神科 - 精神康复专业" },
+  { value: "精神科/社区防治专业", label: "精神科 - 社区防治专业" },
+  { value: "精神科/临床心理专业", label: "精神科 - 临床心理专业" },
+  { value: "精神科/司法精神专业", label: "精神科 - 司法精神专业" },
+  { value: "精神科/其他", label: "精神科 - 其他（需填写）" },
+  // 一级：传染科
+  { value: "传染科/结核病科", label: "传染科 - 结核病科" },
+  { value: "传染科/地方病科", label: "传染科 - 地方病科" },
+  // 一级：肿瘤科
+  { value: "肿瘤科", label: "肿瘤科" },
+  // 一级：急诊医学科
+  { value: "急诊医学科", label: "急诊医学科" },
+  // 一级：康复医学科
+  { value: "康复医学科", label: "康复医学科" },
+  // 一级：运动医学科
+  { value: "运动医学科", label: "运动医学科" },
+  // 一级：职业病科
+  { value: "职业病科/临终关怀科", label: "职业病科 - 临终关怀科" },
+  {
+    value: "职业病科/特种医学与军事医学科",
+    label: "职业病科 - 特种医学与军事医学科",
+  },
+  // 一级：麻醉科
+  { value: "麻醉科", label: "麻醉科" },
+  // 一级：疼痛科
+  { value: "疼痛科", label: "疼痛科" },
+  // 一级：重症医学科
+  { value: "重症医学科", label: "重症医学科" },
+  // 一级：医学检验科
+  { value: "医学检验科", label: "医学检验科" },
+  // 一级：病理科
+  { value: "病理科", label: "病理科" },
+  // 一级：医学影像科
+  { value: "医学影像科/X线诊断专业", label: "医学影像科 - X线诊断专业" },
+  { value: "医学影像科/CT诊断专业", label: "医学影像科 - CT诊断专业" },
+  {
+    value: "医学影像科/磁共振成像诊断专业",
+    label: "医学影像科 - 磁共振成像诊断专业",
+  },
+  { value: "医学影像科/核医学专业", label: "医学影像科 - 核医学专业" },
+  { value: "医学影像科/超声诊断专业", label: "医学影像科 - 超声诊断专业" },
+  { value: "医学影像科/心电诊断专业", label: "医学影像科 - 心电诊断专业" },
+  {
+    value: "医学影像科/脑电及脑血流图诊断专业",
+    label: "医学影像科 - 脑电及脑血流图诊断专业",
+  },
+  {
+    value: "医学影像科/神经肌肉电图专业",
+    label: "医学影像科 - 神经肌肉电图专业",
+  },
+  { value: "医学影像科/介入放射学专业", label: "医学影像科 - 介入放射学专业" },
+  { value: "医学影像科/放射治疗专业", label: "医学影像科 - 放射治疗专业" },
+  { value: "医学影像科/其他", label: "医学影像科 - 其他（需填写）" },
+  // 一级：中医科
+  { value: "中医科/内科专业", label: "中医科 - 内科专业" },
+  { value: "中医科/外科专业", label: "中医科 - 外科专业" },
+  { value: "中医科/妇产科专业", label: "中医科 - 妇产科专业" },
+  { value: "中医科/儿科专业", label: "中医科 - 儿科专业" },
+  { value: "中医科/皮肤科专业", label: "中医科 - 皮肤科专业" },
+  { value: "中医科/眼科专业", label: "中医科 - 眼科专业" },
+  { value: "中医科/耳鼻咽喉科", label: "中医科 - 耳鼻咽喉科" },
+  { value: "中医科/口腔科专业", label: "中医科 - 口腔科专业" },
+  { value: "中医科/肿瘤科专业", label: "中医科 - 肿瘤科专业" },
+  { value: "中医科/骨伤科专业", label: "中医科 - 骨伤科专业" },
+  { value: "中医科/肛肠科专业", label: "中医科 - 肛肠科专业" },
+  { value: "中医科/老年病科专业", label: "中医科 - 老年病科专业" },
+  { value: "中医科/针灸科专业", label: "中医科 - 针灸科专业" },
+  { value: "中医科/推拿科专业", label: "中医科 - 推拿科专业" },
+  { value: "中医科/康复医学专业", label: "中医科 - 康复医学专业" },
+  { value: "中医科/急诊科专业", label: "中医科 - 急诊科专业" },
+  { value: "中医科/预防保健科专业", label: "中医科 - 预防保健科专业" },
+  { value: "中医科/其他", label: "中医科 - 其他（需填写）" },
+  // 一级：民族医学科
+  { value: "民族医学科/中西医结合科", label: "民族医学科 - 中西医结合科" },
+  {
+    value: "民族医学科/重症监护室（综合）",
+    label: "民族医学科 - 重症监护室（综合）",
+  },
+  // 一级：其他
+  {
+    value: "其他/I期临床试验研究室/I期药物临床试验",
+    label: "其他 - I期临床试验研究室 - I期药物临床试验",
+  },
+  {
+    value: "其他/I期临床试验研究室/生物等效性试验",
+    label: "其他 - I期临床试验研究室 - 生物等效性试验",
+  },
+  { value: "其他/其他", label: "其他 - 其他（需填写）" },
+];
 
 const statusDisplay = {
   draft: "草稿",
@@ -38,7 +247,7 @@ const statusDisplay = {
 };
 
 function Application() {
-  const { specialties, addPiRecord, piRecords, progressPiRecord } =
+  const { addPiRecord, piRecords, progressPiRecord } =
     useContext(AppDataContext);
   const { currentUser, hasRole, roleLabels } = useContext(AuthContext);
 
@@ -50,7 +259,6 @@ function Application() {
     specialty: "",
     campus: [],
     selfReport: null,
-    comment: "",
   });
 
   // 新增 PI 表单
@@ -60,15 +268,15 @@ function Application() {
       `proof-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
     return {
       trialTypes: [],
-      name: "",
-      dept: "",
       specialty: "",
-      gcp: null,
-      titleCert: null,
-      resume: null,
-      qualification: null,
-      practice: null,
-      expertise: "",
+      piPhoto: null, // PI形象照
+      seniorTitleCertificate: null, // 高级职称证书
+      seniorTitleAppointment: null, // 高级职称受聘证明文件
+      signedResume: null, // 签字版简历
+      qualificationCertificate: null, // 资格证书
+      practiceCertificate: null, // 执业证书
+      gcpCertificate: null, // GCP证书
+      expertise: "", // 擅长领域
       // 参与临床试验证明材料（动态添加）
       trialProofs: [
         {
@@ -90,6 +298,7 @@ function Application() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [detailId, setDetailId] = useState(null);
   const [comment, setComment] = useState("");
+  const [activeTab, setActiveTab] = useState("group"); // 控制当前激活的标签页
 
   const toggleType = (key) => {
     setTypes((prev) => {
@@ -103,9 +312,12 @@ function Application() {
   };
 
   const handleFile = (setter, key) => (file) => {
+    // Ant Design Upload 组件传递的 file 对象结构：
+    // 如果是新上传的文件：{ originFileObj: File, ... }
+    // 我们需要保存这个对象，以便后续访问 originFileObj
     setter((prev) => ({
       ...prev,
-      [key]: { name: file.name, size: `${file.size}B` },
+      [key]: file, // 保存完整的文件对象（包含 originFileObj）
     }));
     return false; // 阻止自动上传，仅做前端展示
   };
@@ -129,10 +341,11 @@ function Application() {
       const newProofs = [...prev.trialProofs];
       const proofIndex = newProofs.findIndex((p) => p.id === proofId);
       if (proofIndex !== -1) {
-        const fileInfo = { name: file.name, size: `${file.size}B` };
+        // 保存完整的 File 对象（Ant Design Upload 组件会包装为 { originFileObj: File, ... }）
+        const fileInfo = file.originFileObj ? file : { originFileObj: file };
         newProofs[proofIndex] = {
           ...newProofs[proofIndex],
-          [fieldName]: [...newProofs[proofIndex][fieldName], fileInfo],
+          [fieldName]: [...(newProofs[proofIndex][fieldName] || []), fileInfo],
         };
       }
       return { ...prev, trialProofs: newProofs };
@@ -184,27 +397,191 @@ function Application() {
     }));
   };
 
-  const submitPi = async (e) => {
-    e.preventDefault();
+  // 提交专业组表单
+  const submitGroup = async () => {
+    if (!hasRole(["pi", "admin"])) {
+      setToast("仅 PI 或管理员可提交专业组申请");
+      message.error("仅 PI 或管理员可提交专业组申请");
+      return;
+    }
+
+    try {
+      // 构建 FormData，匹配后端 ProfessionalGroupAddDTO 格式
+      const formData = new FormData();
+
+      // recordTypes: 将前端的值转换为后端需要的中文名称
+      const typeMap = {
+        drug: "药物临床试验",
+        device: "医疗器械临床试验",
+      };
+      const recordTypes = groupForm.trialTypes.map(
+        (type) => typeMap[type] || type
+      );
+      recordTypes.forEach((type) => {
+        formData.append("recordTypes", type);
+      });
+
+      // recordNames: 后端需要 List<String>，前端是单个字符串，转换为数组
+      if (groupForm.specialty) {
+        formData.append("recordNames", groupForm.specialty);
+      }
+
+      // hospitalAreas: 直接使用前端的数组
+      groupForm.campus.forEach((area) => {
+        formData.append("hospitalAreas", area);
+      });
+
+      // file: 专业组自评报告
+      const getFileObj = (fileObj) => {
+        if (!fileObj) return null;
+        if (fileObj instanceof File) {
+          return fileObj;
+        }
+        if (fileObj.originFileObj && fileObj.originFileObj instanceof File) {
+          return fileObj.originFileObj;
+        }
+        return null;
+      };
+
+      const selfReportFile = getFileObj(groupForm.selfReport);
+      if (selfReportFile) {
+        formData.append("file", selfReportFile);
+      }
+
+      // 提交专业组
+      const response = await professionalGroupApi.submit(formData);
+      if (response.success) {
+        message.success("专业组提交成功，请继续填写 PI 信息");
+        // 切换到 PI 标签页
+        setActiveTab("pi");
+        // 清空专业组表单（可选）
+        // setGroupForm({
+        //   trialTypes: [],
+        //   specialty: "",
+        //   campus: [],
+        //   selfReport: null,
+        //   comment: "",
+        // });
+      } else {
+        throw new Error(response.message || "提交失败");
+      }
+    } catch (error) {
+      message.error(error.message || "提交失败，请重试");
+    }
+  };
+
+  const submitPi = async () => {
+    // Ant Design Form 的 onFinish 回调可以接收表单值作为参数
+    // 但这里我们使用 piForm state，所以不需要参数
+    // 不需要调用 e.preventDefault()，Form 组件已经处理了默认提交行为
     if (!hasRole(["pi", "admin"])) {
       setToast("仅 PI 或管理员可发起 PI 备案申请");
       return;
     }
-    if (!piForm.name || !piForm.specialty) {
-      setToast("请完整填写 PI 基本信息及所属专业");
-      return;
-    }
+    // 所有字段都是可选的，移除验证逻辑
+
     try {
-      await addPiRecord({
-        title: `${piForm.name} 的 PI 备案`,
-        applicant: piForm.name,
-        department: piForm.dept,
+      // 构建 FormData，匹配后端 PiInfoDTO 格式
+      const formData = new FormData();
+
+      // 基本字段（所有字段都是可选的）
+      formData.append("Id", currentUser?.id || "");
+      formData.append("professional", piForm.specialty || "");
+      formData.append("shanchang", piForm.expertise || "");
+      formData.append("clinicalParticipation", piForm.trialProofs.length > 0);
+      // 无论是否有证明材料，都传递 clinicalReason（如果填写了的话）
+      if (piForm.noProofReason) {
+        formData.append("clinicalReason", piForm.noProofReason);
+      }
+
+      // 文件字段（如果有文件对象）
+      // 获取文件的辅助函数：优先使用 originFileObj，如果没有则尝试直接使用
+      const getFileObj = (fileObj) => {
+        if (!fileObj) return null;
+        // 如果 fileObj 本身就是 File 对象
+        if (fileObj instanceof File) {
+          return fileObj;
+        }
+        // 如果 fileObj 包含 originFileObj
+        if (fileObj.originFileObj && fileObj.originFileObj instanceof File) {
+          return fileObj.originFileObj;
+        }
+        return null;
+      };
+
+      // PI形象照
+      const piPhotoFile = getFileObj(piForm.piPhoto);
+      if (piPhotoFile) {
+        formData.append("piPhoto", piPhotoFile);
+      }
+
+      // 高级职称证书
+      const seniorTitleCertFile = getFileObj(piForm.seniorTitleCertificate);
+      if (seniorTitleCertFile) {
+        formData.append("seniorTitleCertificate", seniorTitleCertFile);
+      }
+
+      // 高级职称受聘证明文件
+      const seniorTitleAppointmentFile = getFileObj(
+        piForm.seniorTitleAppointment
+      );
+      if (seniorTitleAppointmentFile) {
+        formData.append("seniorTitleAppointment", seniorTitleAppointmentFile);
+      }
+
+      // 签字版简历
+      const resumeFile = getFileObj(piForm.signedResume);
+      if (resumeFile) {
+        formData.append("signedResume", resumeFile);
+      }
+
+      // 资格证书
+      const qualificationFile = getFileObj(piForm.qualificationCertificate);
+      if (qualificationFile) {
+        formData.append("qualificationCertificate", qualificationFile);
+      }
+
+      // 执业证书
+      const practiceFile = getFileObj(piForm.practiceCertificate);
+      if (practiceFile) {
+        formData.append("practiceCertificate", practiceFile);
+      }
+
+      // GCP证书
+      const gcpFile = getFileObj(piForm.gcpCertificate);
+      if (gcpFile) {
+        formData.append("gcpCertificate", gcpFile);
+      }
+
+      // 参与临床试验证明材料（clinicalMaterials）
+      // 后端期望 ClinicalMaterialDTO 数组，Spring @ModelAttribute 需要特殊格式
+      piForm.trialProofs.forEach((proof, index) => {
+        formData.append(
+          `clinicalMaterials[${index}].projectName`,
+          proof.projectName || ""
+        );
+
+        // 注意：后端每个文件字段是单个 MultipartFile，不是数组
+        // 如果前端有多个文件，这里只取第一个，或者需要调整后端支持多文件
+        if (
+          proof.approvalDoc &&
+          proof.approvalDoc.length > 0 &&
+          proof.approvalDoc[0]?.originFileObj
+        ) {
+          formData.append(
+            `clinicalMaterials[${index}].nmpaApproval`,
+            proof.approvalDoc[0].originFileObj
+          );
+        }
+        // 类似处理其他文件字段...
       });
-      setToast("已生成 PI 备案申请草稿，可在 PI 备案列表中查看");
-      message.success("已生成 PI 备案申请草稿");
+
+      await addPiRecord(formData);
+      setToast("PI 信息提交成功");
+      message.success("PI 信息提交成功");
     } catch (error) {
-      setToast(error.message || "创建失败，请重试");
-      message.error(error.message || "创建失败，请重试");
+      setToast(error.message || "提交失败，请重试");
+      message.error(error.message || "提交失败，请重试");
     }
   };
 
@@ -226,7 +603,7 @@ function Application() {
     return false;
   };
 
-  const handleAction = (record, action) => {
+  const handleAction = async (record, action) => {
     const role = currentUser?.role;
     if (!role) return;
     const mapAction = {
@@ -249,19 +626,21 @@ function Application() {
     const can = mapAction[action]?.allow;
     if (!can) return;
 
-    (async () => {
-      try {
-        await progressPiRecord({
-          id: record.id,
-          action,
-          comment,
-        });
-        setComment("");
-        message.success("操作成功");
-      } catch (error) {
-        message.error(error.message || "操作失败，请重试");
-      }
-    })();
+    try {
+      // action 可能是 "approve_secretary", "approve_director", "approve_chief", "reject"
+      // 后端需要的是 approve (boolean)
+      const approve = action.startsWith("approve");
+
+      await progressPiRecord({
+        id: record.id,
+        action: approve ? "approve" : "reject",
+        comment,
+      });
+      setComment("");
+      message.success("操作成功");
+    } catch (error) {
+      message.error(error.message || "操作失败，请重试");
+    }
   };
 
   const renderActions = (record) => {
@@ -475,7 +854,8 @@ function Application() {
 
       <Tabs
         type="card"
-        defaultActiveKey="group"
+        activeKey={activeTab}
+        onChange={setActiveTab}
         items={[
           types.group && {
             key: "group",
@@ -513,17 +893,21 @@ function Application() {
                               specialty: val,
                             }))
                           }
+                          showSearch
+                          filterOption={(input, option) =>
+                            (option?.label ?? "")
+                              .toLowerCase()
+                              .includes(input.toLowerCase())
+                          }
                         >
-                          {specialties.flatMap((dept) =>
-                            dept.groups.map((g) => (
-                              <Select.Option
-                                key={`${dept.id}-${g.name}`}
-                                value={`${dept.department}/${g.name}`}
-                              >
-                                {dept.department} - {g.name}
-                              </Select.Option>
-                            ))
-                          )}
+                          {SPECIALTY_OPTIONS.map((option) => (
+                            <Select.Option
+                              key={option.value}
+                              value={option.value}
+                            >
+                              {option.label}
+                            </Select.Option>
+                          ))}
                         </Select>
                       </Form.Item>
                     </Col>
@@ -564,17 +948,10 @@ function Application() {
                       </Form.Item>
                     </Col>
                   </Row>
-                  <Form.Item label="其他补充（整改说明 / 以往检查情况等）">
-                    <TextArea
-                      rows={3}
-                      value={groupForm.comment}
-                      onChange={(e) =>
-                        setGroupForm((prev) => ({
-                          ...prev,
-                          comment: e.target.value,
-                        }))
-                      }
-                    />
+                  <Form.Item>
+                    <Button type="primary" onClick={submitGroup}>
+                      提交专业组信息
+                    </Button>
                   </Form.Item>
                 </Form>
               </Card>
@@ -601,77 +978,83 @@ function Application() {
                         />
                       </Form.Item>
                     </Col>
-                    <Col span={6}>
-                      <Form.Item label="PI 姓名" required>
-                        <Input
-                          value={piForm.name}
-                          onChange={(e) =>
-                            setPiForm((prev) => ({
-                              ...prev,
-                              name: e.target.value,
-                            }))
-                          }
-                        />
-                      </Form.Item>
-                    </Col>
-                    <Col span={6}>
-                      <Form.Item label="所属科室">
-                        <Input
-                          value={piForm.dept}
-                          onChange={(e) =>
-                            setPiForm((prev) => ({
-                              ...prev,
-                              dept: e.target.value,
-                            }))
-                          }
-                        />
-                      </Form.Item>
-                    </Col>
                   </Row>
                   <Row gutter={16}>
                     <Col span={12}>
-                      <Form.Item
-                        label="所属专业（下拉，来源于备案专业名称）"
-                        required
-                      >
+                      <Form.Item label="所属专业（下拉，来源于备案专业名称）">
                         <Select
                           placeholder="请选择所属专业"
                           value={piForm.specialty}
                           onChange={(val) =>
                             setPiForm((prev) => ({ ...prev, specialty: val }))
                           }
+                          showSearch
+                          filterOption={(input, option) =>
+                            (option?.label ?? "")
+                              .toLowerCase()
+                              .includes(input.toLowerCase())
+                          }
                         >
-                          {specialties.map((dept) =>
-                            dept.groups.map((g) => (
-                              <Select.Option
-                                key={`${dept.id}-${g.name}`}
-                                value={`${dept.department}/${g.name}`}
-                              >
-                                {dept.department} - {g.name}
-                              </Select.Option>
-                            ))
-                          )}
+                          {SPECIALTY_OPTIONS.map((option) => (
+                            <Select.Option
+                              key={option.value}
+                              value={option.value}
+                            >
+                              {option.label}
+                            </Select.Option>
+                          ))}
                         </Select>
                       </Form.Item>
                     </Col>
                   </Row>
                   <Row gutter={16}>
                     <Col span={12}>
-                      <Form.Item label="GCP 证书">
+                      <Form.Item label="PI 形象照">
                         <Upload
-                          beforeUpload={handleFile(setPiForm, "gcp")}
+                          beforeUpload={handleFile(setPiForm, "piPhoto")}
+                          maxCount={1}
+                          accept="image/*"
+                          listType="text"
+                          onPreview={handlePreview}
+                        >
+                          <Button type="dashed" icon={<PaperClipOutlined />}>
+                            上传 PI 形象照
+                          </Button>
+                        </Upload>
+                      </Form.Item>
+                      <Form.Item label="高级职称证书">
+                        <Upload
+                          beforeUpload={handleFile(
+                            setPiForm,
+                            "seniorTitleCertificate"
+                          )}
                           maxCount={1}
                           listType="text"
                           onPreview={handlePreview}
                         >
                           <Button type="dashed" icon={<PaperClipOutlined />}>
-                            上传 GCP 证书
+                            上传高级职称证书
+                          </Button>
+                        </Upload>
+                      </Form.Item>
+                      <Form.Item label="高级职称受聘证明文件">
+                        <Upload
+                          beforeUpload={handleFile(
+                            setPiForm,
+                            "seniorTitleAppointment"
+                          )}
+                          maxCount={1}
+                          listType="text"
+                          onPreview={handlePreview}
+                        >
+                          <Button type="dashed" icon={<PaperClipOutlined />}>
+                            上传高级职称受聘证明文件
                           </Button>
                         </Upload>
                       </Form.Item>
                       <Form.Item label="签字版简历">
                         <Upload
-                          beforeUpload={handleFile(setPiForm, "resume")}
+                          beforeUpload={handleFile(setPiForm, "signedResume")}
                           maxCount={1}
                           listType="text"
                           onPreview={handlePreview}
@@ -683,7 +1066,10 @@ function Application() {
                       </Form.Item>
                       <Form.Item label="资格证书">
                         <Upload
-                          beforeUpload={handleFile(setPiForm, "qualification")}
+                          beforeUpload={handleFile(
+                            setPiForm,
+                            "qualificationCertificate"
+                          )}
                           maxCount={1}
                           listType="text"
                           onPreview={handlePreview}
@@ -695,27 +1081,30 @@ function Application() {
                       </Form.Item>
                     </Col>
                     <Col span={12}>
-                      <Form.Item label="高级职称证书">
-                        <Upload
-                          beforeUpload={handleFile(setPiForm, "titleCert")}
-                          maxCount={1}
-                          listType="text"
-                          onPreview={handlePreview}
-                        >
-                          <Button type="dashed" icon={<PaperClipOutlined />}>
-                            上传高级职称证书
-                          </Button>
-                        </Upload>
-                      </Form.Item>
                       <Form.Item label="执业证书">
                         <Upload
-                          beforeUpload={handleFile(setPiForm, "practice")}
+                          beforeUpload={handleFile(
+                            setPiForm,
+                            "practiceCertificate"
+                          )}
                           maxCount={1}
                           listType="text"
                           onPreview={handlePreview}
                         >
                           <Button type="dashed" icon={<PaperClipOutlined />}>
                             上传执业证书
+                          </Button>
+                        </Upload>
+                      </Form.Item>
+                      <Form.Item label="GCP 证书">
+                        <Upload
+                          beforeUpload={handleFile(setPiForm, "gcpCertificate")}
+                          maxCount={1}
+                          listType="text"
+                          onPreview={handlePreview}
+                        >
+                          <Button type="dashed" icon={<PaperClipOutlined />}>
+                            上传 GCP 证书
                           </Button>
                         </Upload>
                       </Form.Item>
@@ -1001,10 +1390,7 @@ function Application() {
                   ) : (
                     <>
                       {/* 若没有任何证明材料，显示不上传的说明原因 */}
-                      <Form.Item
-                        label="说明原因（若不上传参与临床试验证明材料需填写）"
-                        required
-                      >
+                      <Form.Item label="说明原因（若不上传参与临床试验证明材料需填写）">
                         <TextArea
                           rows={4}
                           placeholder="请说明不上传参与临床试验证明材料的原因"

@@ -1,7 +1,14 @@
 import Mock from "mockjs";
 
 // 只在开发环境启用 Mock.js 拦截
-if (import.meta.env.DEV) {
+// 可以通过环境变量 VITE_USE_MOCK=false 来禁用 mock，使用真实后端
+const useMock =
+  import.meta.env.DEV && import.meta.env.VITE_USE_MOCK !== "false";
+
+if (useMock) {
+  console.log(
+    "[Mock] Mock.js 已启用，如需使用真实后端，请设置 VITE_USE_MOCK=false"
+  );
   Mock.setup({ timeout: "300-800" });
 
   // ============ 内存数据（体验账号 + 示例数据） ============
@@ -336,4 +343,6 @@ if (import.meta.env.DEV) {
     success: true,
     data: specialties,
   }));
+} else if (import.meta.env.DEV) {
+  console.log("[Mock] Mock.js 已禁用，将使用真实后端 API");
 }
