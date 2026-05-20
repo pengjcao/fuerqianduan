@@ -1,4 +1,4 @@
-import { createContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useEffect, useMemo, useState, useCallback } from 'react';
 import { piRecordApi, departmentApi } from '../api';
 
 export const AppDataContext = createContext(null);
@@ -19,8 +19,44 @@ export function AppDataProvider({ children }) {
   const [members, setMembers] = useState([]);
   const [trials, setTrials] = useState([]);
   const [piRecords, setPiRecords] = useState([]);
+  const [approvedPis, setApprovedPis] = useState([]); // 已备案的PI列表
   const [specialties, setSpecialties] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // 获取已备案 PI 列表
+  const fetchApprovedPis = useCallback(async () => {
+    try {
+      // 如果后端有专门的已备案接口，使用它；否则使用getPendingList并过滤
+      let response;
+      try {
+        response = await piRecordApi.getApprovedList();
+      } catch (error) {
+        // 如果接口不存在，尝试从待审核列表中过滤已备案的
+        // 或者返回空数组，等待后端添加接口
+        console.warn("已备案PI接口不存在，使用待审核列表过滤");
+        const pendingResponse = await piRecordApi.getPendingList();
+        if (pendingResponse.success) {
+          // 过滤出已备案的（applyStatus不是PENDING_APPROVAL的）
+          const approved = (pendingResponse.data || []).filter(
+            (pi) => pi.applyStatus && pi.applyStatus !== "PENDING_APPROVAL"
+          );
+          setApprovedPis(approved);
+          return;
+        }
+        setApprovedPis([]);
+        return;
+      }
+      
+      if (response.success) {
+        setApprovedPis(response.data || []);
+      } else {
+        setApprovedPis([]);
+      }
+    } catch (error) {
+      console.error("Failed to fetch approved PIs:", error);
+      setApprovedPis([]);
+    }
+  }, []);
 
   // 初始化时从 API 获取数据
   useEffect(() => {
@@ -32,6 +68,9 @@ export function AppDataProvider({ children }) {
         if (piRes.success) {
           setPiRecords(piRes.data || []);
         }
+        
+        // 获取已备案 PI 列表
+        await fetchApprovedPis();
       } catch (error) {
         console.error("Failed to fetch data:", error);
       } finally {
@@ -39,7 +78,7 @@ export function AppDataProvider({ children }) {
       }
     };
     fetchData();
-  }, []);
+  }, [fetchApprovedPis]);
 
   const addGroup = (payload) => {
     const next = {
@@ -90,12 +129,11 @@ export function AppDataProvider({ children }) {
   };
 
   // 审批 PI（approve: true=通过, false=驳回）
-  // 注意：后端接口目前可能需要 pi_info_id，但目前后端代码中硬编码为 1
-  // 如果后端需要传递 id，需要调整 API
-  const progressPiRecord = async ({ id, action, comment }) => {
+  // 参数: { userId: string, pi_info_id: number, action: "approve" | "reject", comment?: string }
+  const progressPiRecord = async ({ userId, pi_info_id, action, comment }) => {
     try {
       const approve = action === "approve"; // action: "approve" | "reject"
-      const response = await piRecordApi.review(approve, comment);
+      const response = await piRecordApi.review(userId, pi_info_id, approve, comment);
       if (response.success) {
         // 刷新列表
         await refreshPiRecords();
@@ -109,16 +147,20 @@ export function AppDataProvider({ children }) {
   };
 
   // 刷新 PI 记录列表
-  const refreshPiRecords = async () => {
+  const refreshPiRecords = useCallback(async () => {
     try {
       const response = await piRecordApi.getPendingList();
       if (response.success) {
         setPiRecords(response.data || []);
+        return response;
+      } else {
+        throw new Error(response.message || "获取待审批列表失败");
       }
     } catch (error) {
       console.error("Failed to refresh PI records:", error);
+      throw error;
     }
-  };
+  }, []);
 
   const summary = useMemo(() => {
     return {
@@ -138,6 +180,7 @@ export function AppDataProvider({ children }) {
         members,
         trials,
         piRecords,
+        approvedPis,
         specialties,
         addGroup,
         addMember,
@@ -145,6 +188,7 @@ export function AppDataProvider({ children }) {
         addPiRecord,
         progressPiRecord,
         refreshPiRecords,
+        fetchApprovedPis,
         summary,
         statusMap,
         getGroupName,

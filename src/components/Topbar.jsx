@@ -9,6 +9,11 @@ const titleMap = {
   "/application": "专业组及 PI 备案申请",
   "/pi-records": "PI 备案列表 / 审批",
   "/specialties": "备案专业名称",
+  "/institution/team": "研究团队",
+  "/institution/files": "文件体系",
+  "/publish-notice": "发布通知",
+  "/notice-group": "通知分组管理",
+  "/keshi": "科室管理",
 };
 
 function Topbar() {
@@ -16,7 +21,25 @@ function Topbar() {
   const { summary } = useContext(AppDataContext);
   const { currentUser, logout, roleLabels } = useContext(AuthContext);
   const navigate = useNavigate();
-  const title = titleMap[location.pathname] ?? "临床试验专业组";
+  const getTitle = () => {
+    if (titleMap[location.pathname]) {
+      return titleMap[location.pathname];
+    }
+    if (location.pathname.startsWith("/keshi")) {
+      // 匹配 /keshi/:id/group/:groupId
+      if (location.pathname.match(/^\/keshi\/\d+\/group\/\d+$/)) {
+        return "专业组详情";
+      }
+      // 匹配 /keshi/:id
+      if (location.pathname.match(/^\/keshi\/\d+$/)) {
+        return "科室详情";
+      }
+      return "科室管理";
+    }
+    return "临床试验专业组";
+  };
+
+  const title = getTitle();
 
   return (
     <header className="topbar">

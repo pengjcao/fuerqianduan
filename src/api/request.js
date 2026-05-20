@@ -1,11 +1,10 @@
 import axios from "axios";
 
-// 根据环境变量决定 baseURL
-// 开发环境：使用 /api，由 Vite 代理转发到后端
-// 生产环境：可以配置为实际的后端地址
-const baseURL = import.meta.env.PROD
-  ? import.meta.env.VITE_API_BASE_URL || "/api" // 生产环境可通过环境变量配置
-  : "/api"; // 开发环境使用代理
+// 根据环境决定 baseURL
+// 开发环境：使用 /api，由 Vite 代理转发到后端（见 vite.config.js）
+// 生产环境：同样使用 /api，由 Nginx 将 /api 转发到后端 8080
+// 这样前端和后端在浏览器看来是同源访问，不再触发浏览器的 CORS 校验
+const baseURL = "/api";
 
 // 创建 axios 实例
 const request = axios.create({
@@ -24,11 +23,9 @@ request.interceptors.request.use(
     }
 
     // 如果是 FormData，确保 Content-Type 没有被手动设置（让浏览器自动设置包含 boundary）
-    if (config.data instanceof FormData && config.headers["Content-Type"]) {
-      // 如果手动设置了 multipart/form-data，删除它（浏览器会自动添加 boundary）
-      if (config.headers["Content-Type"].includes("multipart/form-data")) {
-        delete config.headers["Content-Type"];
-      }
+    if (config.data instanceof FormData) {
+      // 删除可能存在的 Content-Type，让浏览器自动设置（包含 boundary）
+      delete config.headers["Content-Type"];
     }
 
     return config;

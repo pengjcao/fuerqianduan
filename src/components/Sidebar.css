@@ -78,3 +78,64 @@
   line-height: 1.5;
 }
 
+/* 子菜单样式 */
+.sidebar__group {
+  margin-bottom: 4px;
+}
+
+.sidebar__group-header {
+  padding: 10px 12px;
+  border-radius: 10px;
+  color: #e5e7eb;
+  font-weight: 600;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: background 0.2s ease;
+}
+
+.sidebar__group-header:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.sidebar__group-header.is-active {
+  background: rgba(59, 130, 246, 0.16);
+  color: #bfdbfe;
+}
+
+.sidebar__group-header--level-0 {
+  font-size: 14px;
+}
+
+.sidebar__group-header--level-1 {
+  font-size: 13px;
+  padding-left: 24px;
+  color: #cbd5e1;
+}
+
+.sidebar__group-arrow {
+  font-size: 10px;
+  opacity: 0.7;
+  transition: transform 0.2s ease;
+}
+
+.sidebar__group-children {
+  margin-top: 4px;
+  margin-left: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sidebar__link--level-1 {
+  padding-left: 24px;
+  font-size: 13px;
+  color: #cbd5e1;
+}
+
+.sidebar__link--level-2 {
+  padding-left: 36px;
+  font-size: 12px;
+  color: #94a3b8;
+}
+

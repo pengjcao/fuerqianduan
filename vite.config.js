@@ -13,6 +13,15 @@ export default defineConfig({
         secure: false, // 如果是 https 接口，需要配置这个参数
         // 可选：重写路径，如果后端 API 路径不是 /api 开头，可以在这里重写
         rewrite: (path) => path.replace(/^\/api/, ""),
+        // 确保所有请求头（包括自定义 header 如 cao）都被传递
+        configure: (proxy, _options) => {
+          proxy.on("proxyReq", (proxyReq, req, _res) => {
+            // 确保所有请求头都被传递
+            Object.keys(req.headers).forEach((key) => {
+              proxyReq.setHeader(key, req.headers[key]);
+            });
+          });
+        },
       },
     },
   },

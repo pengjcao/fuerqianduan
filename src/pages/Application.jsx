@@ -1,4 +1,4 @@
-import { useContext, useMemo, useState } from "react";
+import { useContext, useMemo, useState, useEffect } from "react";
 import {
   Card,
   Checkbox,
@@ -15,6 +15,9 @@ import {
   Divider,
   Space,
   Tag,
+  Alert,
+  Empty,
+  Typography,
 } from "antd";
 import {
   InboxOutlined,
@@ -24,7 +27,7 @@ import {
 } from "@ant-design/icons";
 import { AppDataContext } from "../context/AppDataContext";
 import { AuthContext } from "../context/AuthContext";
-import { professionalGroupApi } from "../api";
+import { professionalGroupApi, piRecordApi } from "../api";
 
 const { TextArea } = Input;
 const { Dragger } = Upload;
@@ -299,6 +302,10 @@ function Application() {
   const [detailId, setDetailId] = useState(null);
   const [comment, setComment] = useState("");
   const [activeTab, setActiveTab] = useState("group"); // 控制当前激活的标签页
+  
+  // 审批日志相关状态
+  const [approvalLogs, setApprovalLogs] = useState([]);
+  const [loadingLogs, setLoadingLogs] = useState(false);
 
   const toggleType = (key) => {
     setTypes((prev) => {
@@ -397,112 +404,70 @@ function Application() {
     }));
   };
 
-  // 提交专业组表单
-  const submitGroup = async () => {
+  // 提交表单（根据是否勾选新增专业组，调用不同接口）
+  const submitForm = async () => {
     if (!hasRole(["pi", "admin"])) {
-      setToast("仅 PI 或管理员可提交专业组申请");
-      message.error("仅 PI 或管理员可提交专业组申请");
+      setToast("仅 PI 或管理员可提交申请");
+      message.error("仅 PI 或管理员可提交申请");
       return;
     }
-
-    try {
-      // 构建 FormData，匹配后端 ProfessionalGroupAddDTO 格式
-      const formData = new FormData();
-
-      // recordTypes: 将前端的值转换为后端需要的中文名称
-      const typeMap = {
-        drug: "药物临床试验",
-        device: "医疗器械临床试验",
-      };
-      const recordTypes = groupForm.trialTypes.map(
-        (type) => typeMap[type] || type
-      );
-      recordTypes.forEach((type) => {
-        formData.append("recordTypes", type);
-      });
-
-      // recordNames: 后端需要 List<String>，前端是单个字符串，转换为数组
-      if (groupForm.specialty) {
-        formData.append("recordNames", groupForm.specialty);
-      }
-
-      // hospitalAreas: 直接使用前端的数组
-      groupForm.campus.forEach((area) => {
-        formData.append("hospitalAreas", area);
-      });
-
-      // file: 专业组自评报告
-      const getFileObj = (fileObj) => {
-        if (!fileObj) return null;
-        if (fileObj instanceof File) {
-          return fileObj;
-        }
-        if (fileObj.originFileObj && fileObj.originFileObj instanceof File) {
-          return fileObj.originFileObj;
-        }
-        return null;
-      };
-
-      const selfReportFile = getFileObj(groupForm.selfReport);
-      if (selfReportFile) {
-        formData.append("file", selfReportFile);
-      }
-
-      // 提交专业组
-      const response = await professionalGroupApi.submit(formData);
-      if (response.success) {
-        message.success("专业组提交成功，请继续填写 PI 信息");
-        // 切换到 PI 标签页
-        setActiveTab("pi");
-        // 清空专业组表单（可选）
-        // setGroupForm({
-        //   trialTypes: [],
-        //   specialty: "",
-        //   campus: [],
-        //   selfReport: null,
-        //   comment: "",
-        // });
-      } else {
-        throw new Error(response.message || "提交失败");
-      }
-    } catch (error) {
-      message.error(error.message || "提交失败，请重试");
-    }
-  };
-
-  const submitPi = async () => {
-    // Ant Design Form 的 onFinish 回调可以接收表单值作为参数
-    // 但这里我们使用 piForm state，所以不需要参数
-    // 不需要调用 e.preventDefault()，Form 组件已经处理了默认提交行为
-    if (!hasRole(["pi", "admin"])) {
-      setToast("仅 PI 或管理员可发起 PI 备案申请");
-      return;
-    }
-    // 所有字段都是可选的，移除验证逻辑
 
     try {
       // 构建 FormData，匹配后端 PiInfoDTO 格式
       const formData = new FormData();
 
-      // 基本字段（所有字段都是可选的）
+      // 基本字段
       formData.append("Id", currentUser?.id || "");
-      formData.append("professional", piForm.specialty || "");
+      formData.append("professional", types.group ? groupForm.specialty : piForm.specialty || "");
       formData.append("shanchang", piForm.expertise || "");
       formData.append("clinicalParticipation", piForm.trialProofs.length > 0);
-      // 无论是否有证明材料，都传递 clinicalReason（如果填写了的话）
       if (piForm.noProofReason) {
         formData.append("clinicalReason", piForm.noProofReason);
       }
 
-      // 文件字段（如果有文件对象）
-      // 获取文件的辅助函数：优先使用 originFileObj，如果没有则尝试直接使用
+      // 如果勾选了"新增专业组"，需要添加专业组相关字段
+      if (types.group) {
+        // recordTypes: 将前端的值转换为后端需要的中文名称
+        const typeMap = {
+          drug: "药物临床试验",
+          device: "医疗器械临床试验",
+        };
+        const recordTypes = groupForm.trialTypes.map(
+          (type) => typeMap[type] || type
+        );
+        recordTypes.forEach((type) => {
+          formData.append("recordTypes", type);
+        });
+
+        // hospitalAreas: 专业组备案院区
+        groupForm.campus.forEach((area) => {
+          formData.append("hospitalAreas", area);
+        });
+
+        // selfAssessmentReport: 专业组自评报告
+        const getFileObj = (fileObj) => {
+          if (!fileObj) return null;
+          if (fileObj instanceof File) {
+            return fileObj;
+          }
+          if (fileObj.originFileObj && fileObj.originFileObj instanceof File) {
+            return fileObj.originFileObj;
+          }
+          return null;
+        };
+
+        const selfReportFile = getFileObj(groupForm.selfReport);
+        if (selfReportFile) {
+          formData.append("selfAssessmentReport", selfReportFile);
+        }
+      }
+
+      // PI相关文件字段
       const getFileObj = (fileObj) => {
         if (!fileObj) return null;
-        // 如果 fileObj 本身就是 File 对象
         if (fileObj instanceof File) {
           return fileObj;
         }
-        // 如果 fileObj 包含 originFileObj
         if (fileObj.originFileObj && fileObj.originFileObj instanceof File) {
           return fileObj.originFileObj;
         }
@@ -554,15 +519,12 @@ function Application() {
       }
 
       // 参与临床试验证明材料（clinicalMaterials）
-      // 后端期望 ClinicalMaterialDTO 数组，Spring @ModelAttribute 需要特殊格式
       piForm.trialProofs.forEach((proof, index) => {
         formData.append(
           `clinicalMaterials[${index}].projectName`,
           proof.projectName || ""
         );
 
-        // 注意：后端每个文件字段是单个 MultipartFile，不是数组
-        // 如果前端有多个文件，这里只取第一个，或者需要调整后端支持多文件
         if (
           proof.approvalDoc &&
           proof.approvalDoc.length > 0 &&
@@ -573,19 +535,51 @@ function Application() {
             proof.approvalDoc[0].originFileObj
           );
         }
-        // 类似处理其他文件字段...
       });
 
-      await addPiRecord(formData);
-      setToast("PI 信息提交成功");
-      message.success("PI 信息提交成功");
+      // 根据是否勾选"新增专业组"调用不同接口
+      let response;
+      if (types.group) {
+        // 新增专业组（必须包含PI信息），调用 /zhuanyezu 接口
+        response = await professionalGroupApi.submit(formData);
+        if (response && response.success) {
+          message.success("专业组及PI信息提交成功");
+          return;
+        } else {
+          throw new Error(response?.message || "提交失败");
+        }
+      } else {
+        // 只新增PI，调用 /piinfo 接口
+        try {
+          await addPiRecord(formData);
+          message.success("PI信息提交成功");
+          return;
+        } catch (error) {
+          throw error;
+        }
+      }
     } catch (error) {
-      setToast(error.message || "提交失败，请重试");
       message.error(error.message || "提交失败，请重试");
     }
   };
 
+
   const isPi = currentUser?.role === "pi";
+
+  // 如果用户信息还未加载，显示加载中
+  if (!currentUser) {
+    return (
+      <div style={{ padding: 24 }}>
+        <h1 className="page-heading">专业组及 PI 备案申请</h1>
+        <Alert
+          message="加载中"
+          description="正在加载用户信息..."
+          type="info"
+          showIcon
+        />
+      </div>
+    );
+  }
 
   // 审核视图相关逻辑（机构办秘书/主任/机构主任）
   const detail = useMemo(
@@ -688,6 +682,91 @@ function Application() {
       ),
     [piRecords, statusFilter]
   );
+
+  // 获取审批日志
+  const fetchApprovalLogs = async () => {
+    if (!isPi) return; // 只有研究者才能查看审批日志
+    setLoadingLogs(true);
+    try {
+      const response = await piRecordApi.getApprovalLogs();
+      console.log("[Application] 审批日志API响应:", response);
+      
+      if (response && response.success) {
+        // API 成功返回，更新数据（即使为空数组也要更新，因为这是最新状态）
+        const data = response.data;
+        // 确保 data 是数组格式
+        if (Array.isArray(data)) {
+          setApprovalLogs(data);
+          if (data.length > 0) {
+            message.success(`刷新成功，共 ${data.length} 条记录`);
+          } else {
+            message.info("暂无审批记录");
+          }
+        } else {
+          // 如果返回的不是数组，可能是数据格式问题
+          console.warn("[Application] 审批日志数据格式异常:", data);
+          setApprovalLogs([]);
+          message.warning("数据格式异常，已清空显示");
+        }
+      } else {
+        // API 返回失败，显示错误信息，但不清空已有数据（可能是临时网络问题）
+        const errorMsg = response?.message || "获取审批日志失败";
+        console.error("[Application] 审批日志API返回失败:", response);
+        message.error(errorMsg);
+        // 保持当前数据不变，不调用 setApprovalLogs
+      }
+    } catch (error) {
+      console.error("[Application] 获取审批日志异常:", error);
+      // 网络错误或其他异常，显示错误，但不清空已有数据
+      message.error(error?.message || "获取审批日志失败，请稍后重试");
+      // 保持当前数据不变，不调用 setApprovalLogs
+    } finally {
+      setLoadingLogs(false);
+    }
+  };
+
+  // 组件挂载时获取审批日志（仅研究者）
+  useEffect(() => {
+    if (isPi) {
+      fetchApprovalLogs();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // 只在组件挂载时执行一次
+
+  // 格式化时间戳
+  const formatLogDate = (timestamp) => {
+    if (!timestamp) return "未知";
+    try {
+      const date = new Date(timestamp);
+      return date.toLocaleString("zh-CN", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      });
+    } catch {
+      return "未知";
+    }
+  };
+
+  // 角色名称映射
+  const roleNameMap = {
+    1: "研究者",
+    2: "机构办秘书",
+    3: "机构办主任",
+    4: "机构主任",
+    5: "其他",
+  };
+
+  // 状态名称映射
+  const statusNameMap = {
+    APPROVE: { color: "green", text: "通过" },
+    REJECT: { color: "red", text: "驳回" },
+    REJECTED: { color: "red", text: "驳回" },
+    PENDING_APPROVAL: { color: "orange", text: "待审核" },
+  };
 
   if (!isPi) {
     // 审核视图：机构办秘书 / 主任 / 机构主任
@@ -857,128 +936,112 @@ function Application() {
         activeKey={activeTab}
         onChange={setActiveTab}
         items={[
-          types.group && {
-            key: "group",
-            label: "新增专业组",
-            children: (
-              <Card>
-                <Form layout="vertical">
-                  <Row gutter={16}>
-                    <Col span={12}>
-                      <Form.Item label="专业组备案类型（多选）">
-                        <Checkbox.Group
-                          options={[
-                            { label: "药物临床试验", value: "drug" },
-                            { label: "医疗器械临床试验", value: "device" },
-                          ]}
-                          value={groupForm.trialTypes}
-                          onChange={(val) =>
-                            setGroupForm((prev) => ({
-                              ...prev,
-                              trialTypes: val,
-                            }))
-                          }
-                        />
-                      </Form.Item>
-                    </Col>
-                    <Col span={12}>
-                      <Form.Item label="专业组备案名称（下拉，来源于备案专业名称）">
-                        <Select
-                          allowClear
-                          placeholder="请选择备案专业"
-                          value={groupForm.specialty}
-                          onChange={(val) =>
-                            setGroupForm((prev) => ({
-                              ...prev,
-                              specialty: val,
-                            }))
-                          }
-                          showSearch
-                          filterOption={(input, option) =>
-                            (option?.label ?? "")
-                              .toLowerCase()
-                              .includes(input.toLowerCase())
-                          }
-                        >
-                          {SPECIALTY_OPTIONS.map((option) => (
-                            <Select.Option
-                              key={option.value}
-                              value={option.value}
-                            >
-                              {option.label}
-                            </Select.Option>
-                          ))}
-                        </Select>
-                      </Form.Item>
-                    </Col>
-                  </Row>
-                  <Row gutter={16}>
-                    <Col span={12}>
-                      <Form.Item label="专业组备案院区（多选）">
-                        <Checkbox.Group
-                          options={["江南院区", "渝中院区"]}
-                          value={groupForm.campus}
-                          onChange={(val) =>
-                            setGroupForm((prev) => ({ ...prev, campus: val }))
-                          }
-                        />
-                      </Form.Item>
-                    </Col>
-                    <Col span={12}>
-                      <Form.Item label="专业组自评报告（Word 文档上传）">
-                        <Dragger
-                          beforeUpload={handleFile(setGroupForm, "selfReport")}
-                          maxCount={1}
-                          accept=".doc,.docx"
-                          style={{ padding: 8, borderStyle: "dashed" }}
-                          onPreview={handlePreview}
-                        >
-                          <p className="ant-upload-drag-icon">
-                            <InboxOutlined />
-                          </p>
-                          <p className="ant-upload-text">
-                            点击或拖拽上传自评报告（Word）
-                          </p>
-                          {groupForm.selfReport && (
-                            <p className="small muted">
-                              已选择：{groupForm.selfReport.name}
-                            </p>
-                          )}
-                        </Dragger>
-                      </Form.Item>
-                    </Col>
-                  </Row>
-                  <Form.Item>
-                    <Button type="primary" onClick={submitGroup}>
-                      提交专业组信息
-                    </Button>
-                  </Form.Item>
-                </Form>
-              </Card>
-            ),
-          },
           types.pi && {
             key: "pi",
-            label: "新增 PI",
+            label: types.group ? "新增专业组及PI" : "新增PI",
             children: (
               <Card>
-                <Form layout="vertical" onFinish={submitPi}>
-                  <Row gutter={16}>
-                    <Col span={12}>
-                      <Form.Item label="PI 备案类型（多选）">
-                        <Checkbox.Group
-                          options={[
-                            { label: "药物临床试验", value: "drug" },
-                            { label: "医疗器械临床试验", value: "device" },
-                          ]}
-                          value={piForm.trialTypes}
-                          onChange={(val) =>
-                            setPiForm((prev) => ({ ...prev, trialTypes: val }))
-                          }
-                        />
-                      </Form.Item>
-                    </Col>
-                  </Row>
+                <Form layout="vertical" onFinish={submitForm}>
+                  {/* 如果勾选了"新增专业组"，显示专业组相关字段 */}
+                  {types.group && (
+                    <>
+                      <Divider orientation="left">专业组备案信息</Divider>
+                      <Row gutter={16}>
+                        <Col span={12}>
+                          <Form.Item label="专业组备案类型（多选）">
+                            <Checkbox.Group
+                              options={[
+                                { label: "药物临床试验", value: "drug" },
+                                { label: "医疗器械临床试验", value: "device" },
+                              ]}
+                              value={groupForm.trialTypes}
+                              onChange={(val) =>
+                                setGroupForm((prev) => ({
+                                  ...prev,
+                                  trialTypes: val,
+                                }))
+                              }
+                            />
+                          </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                          <Form.Item label="专业组备案名称（下拉，来源于备案专业名称）">
+                            <Select
+                              allowClear
+                              placeholder="请选择备案专业"
+                              value={groupForm.specialty}
+                              onChange={(val) => {
+                                setGroupForm((prev) => ({
+                                  ...prev,
+                                  specialty: val,
+                                }));
+                                // 同时更新PI表单的专业字段
+                                setPiForm((prev) => ({
+                                  ...prev,
+                                  specialty: val,
+                                }));
+                              }}
+                              showSearch
+                              filterOption={(input, option) =>
+                                (option?.label ?? "")
+                                  .toLowerCase()
+                                  .includes(input.toLowerCase())
+                              }
+                            >
+                              {SPECIALTY_OPTIONS.map((option) => (
+                                <Select.Option
+                                  key={option.value}
+                                  value={option.value}
+                                >
+                                  {option.label}
+                                </Select.Option>
+                              ))}
+                            </Select>
+                          </Form.Item>
+                        </Col>
+                      </Row>
+                      <Row gutter={16}>
+                        <Col span={12}>
+                          <Form.Item label="专业组备案院区（多选）">
+                            <Checkbox.Group
+                              options={["江南院区", "渝中院区"]}
+                              value={groupForm.campus}
+                              onChange={(val) =>
+                                setGroupForm((prev) => ({ ...prev, campus: val }))
+                              }
+                            />
+                          </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                          <Form.Item label="专业组自评报告（Word 文档上传）">
+                            <Dragger
+                              beforeUpload={handleFile(setGroupForm, "selfReport")}
+                              maxCount={1}
+                              accept=".doc,.docx"
+                              style={{ padding: 8, borderStyle: "dashed" }}
+                              onPreview={handlePreview}
+                            >
+                              <p className="ant-upload-drag-icon">
+                                <InboxOutlined />
+                              </p>
+                              <p className="ant-upload-text">
+                                点击或拖拽上传自评报告（Word）
+                              </p>
+                              {groupForm.selfReport && (
+                                <p className="small muted">
+                                  已选择：{groupForm.selfReport.name}
+                                </p>
+                              )}
+                            </Dragger>
+                          </Form.Item>
+                        </Col>
+                      </Row>
+                      <Divider />
+                    </>
+                  )}
+
+                  {/* PI备案信息 */}
+                  <Divider orientation="left">PI备案信息</Divider>
                   <Row gutter={16}>
                     <Col span={12}>
                       <Form.Item label="所属专业（下拉，来源于备案专业名称）">
@@ -1420,11 +1483,133 @@ function Application() {
 
                   <Form.Item>
                     <Button type="primary" htmlType="submit">
-                      生成 PI 备案申请草稿
+                      {types.group ? "提交专业组及PI备案申请" : "提交PI备案申请"}
                     </Button>
                   </Form.Item>
                   {toast && <p className="small">{toast}</p>}
                 </Form>
+              </Card>
+            ),
+          },
+          // 我的审批进度 Tab（仅研究者可见）
+          isPi && {
+            key: "logs",
+            label: "我的审批进度",
+            children: (
+              <Card>
+                <div style={{ marginBottom: 16 }}>
+                  <Button
+                    type="primary"
+                    onClick={fetchApprovalLogs}
+                    loading={loadingLogs}
+                  >
+                    刷新
+                  </Button>
+                </div>
+                {loadingLogs ? (
+                  <div style={{ textAlign: "center", padding: 40 }}>
+                    <Space>
+                      <div className="ant-spin ant-spin-spinning">
+                        <span className="ant-spin-dot ant-spin-dot-spin">
+                          <i></i>
+                          <i></i>
+                          <i></i>
+                          <i></i>
+                        </span>
+                      </div>
+                      <span>加载中...</span>
+                    </Space>
+                  </div>
+                ) : approvalLogs.length === 0 ? (
+                  <Empty description="暂无审批记录" />
+                ) : (
+                  <div>
+                    {approvalLogs.map((logGroup, index) => (
+                      <Card
+                        key={logGroup.piInfoId || index}
+                        title={`PI备案 ID: ${logGroup.piInfoId}`}
+                        style={{ marginBottom: 16 }}
+                        extra={
+                          <Space>
+                            <Tag
+                              color={
+                                statusNameMap[logGroup.applyStatus]?.color ||
+                                "default"
+                              }
+                            >
+                              {statusNameMap[logGroup.applyStatus]?.text ||
+                                logGroup.applyStatus}
+                            </Tag>
+                            <span>当前步骤: {logGroup.currentStep}</span>
+                          </Space>
+                        }
+                      >
+                        <Table
+                          dataSource={logGroup.logs || []}
+                          rowKey={(record, idx) =>
+                            `${logGroup.piInfoId}-${idx}-${record.approveTime}`
+                          }
+                          pagination={false}
+                          size="small"
+                          columns={[
+                            {
+                              title: "审批时间",
+                              dataIndex: "approveTime",
+                              key: "approveTime",
+                              width: 180,
+                              render: (time) => formatLogDate(time),
+                            },
+                            {
+                              title: "审批人ID",
+                              dataIndex: "approverId",
+                              key: "approverId",
+                              width: 120,
+                            },
+                            {
+                              title: "审批人角色",
+                              dataIndex: "role",
+                              key: "role",
+                              width: 120,
+                              render: (role) => roleNameMap[role] || `角色${role}`,
+                            },
+                            {
+                              title: "步骤",
+                              dataIndex: "currentStep",
+                              key: "currentStep",
+                              width: 80,
+                            },
+                            {
+                              title: "审批结果",
+                              dataIndex: "applyStatus",
+                              key: "applyStatus",
+                              width: 100,
+                              render: (status) => {
+                                const statusInfo =
+                                  statusNameMap[status] ||
+                                  statusNameMap[status?.toUpperCase()] || {
+                                    color: "default",
+                                    text: status || "未知",
+                                  };
+                                return (
+                                  <Tag color={statusInfo.color}>
+                                    {statusInfo.text}
+                                  </Tag>
+                                );
+                              },
+                            },
+                            {
+                              title: "审批意见",
+                              dataIndex: "comment",
+                              key: "comment",
+                              ellipsis: true,
+                              render: (comment) => comment || "-",
+                            },
+                          ]}
+                        />
+                      </Card>
+                    ))}
+                  </div>
+                )}
               </Card>
             ),
           },
