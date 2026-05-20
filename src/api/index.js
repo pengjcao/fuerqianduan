@@ -131,6 +131,27 @@ export const professionalGroupMemberApi = {
     }),
 };
 
+// 专业组基本条件相关 API（科室/专业组资质 - 基本条件）
+export const basicConditionApi = {
+  // 填报基础条件（POST /user/basicCondition/report）
+  report: (data) => request.post("/user/basicCondition/report", data),
+
+  // 查询基础条件详情（GET /user/basicCondition/detail?keshi=xxx）
+  detail: (keshi) =>
+    request.get("/user/basicCondition/detail", { params: { keshi } }),
+};
+
+// 场地设施相关 API（multipart/form-data）
+export const siteFacilityApi = {
+  // 受试者接待室填报（POST /user/siteFacility/receptionRoom/report）
+  reportReceptionRoom: (formData) =>
+    request.post("/user/siteFacility/receptionRoom/report", formData),
+
+  // 受试者接待室详情（GET /user/siteFacility/receptionRoom/detail?keshi=xxx）
+  getReceptionRoomDetail: (keshi) =>
+    request.get("/user/siteFacility/receptionRoom/detail", { params: { keshi } }),
+};
+
 // 机构团队成员相关 API
 export const institutionTeamMemberApi = {
   // 保存或更新机构团队成员（POST /user/institution/save）

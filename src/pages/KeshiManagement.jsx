@@ -17,6 +17,8 @@ import {
   Select,
   Upload,
   Tag,
+  Spin,
+  Radio,
 } from "antd";
 import {
   PlusOutlined,
@@ -35,13 +37,15 @@ import {
   keshiDepartmentApi,
   professionalGroupMemberApi,
   institutionFileSystemApi,
+  basicConditionApi,
+  siteFacilityApi,
 } from "../api";
 import { AuthContext } from "../context/AuthContext";
 
-const { TextArea, Link } = Input;
-const { Dragger } = Upload;
+const { TextArea } = Input;
 
 const { Title, Text } = Typography;
+const { Dragger } = Upload;
 
 function KeshiManagement() {
   const { hasRole, currentUser } = useContext(AuthContext);
@@ -62,27 +66,8 @@ function KeshiManagement() {
   const [groupModalVisible, setGroupModalVisible] = useState(false);
   const [memberModalVisible, setMemberModalVisible] = useState(false);
 
-  // 文件体系相关状态
-  const [fileSystems, setFileSystems] = useState([]);
-  const [fileSystemsLoading, setFileSystemsLoading] = useState(false);
-  const [createFileSystemModalVisible, setCreateFileSystemModalVisible] = useState(false);
-  const [fileSystemForm] = Form.useForm();
-  const [selectedFileSystem, setSelectedFileSystem] = useState(null);
-  const [files, setFiles] = useState([]);
-  const [filesLoading, setFilesLoading] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [uploadModalVisible, setUploadModalVisible] = useState(false);
-  const [uploadForm] = Form.useForm();
-  const [overwriteModalVisible, setOverwriteModalVisible] = useState(false);
-  const [overwriting, setOverwriting] = useState(false);
-  const [overwriteForm] = Form.useForm();
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [historyModalVisible, setHistoryModalVisible] = useState(false);
-  const [historyLoading, setHistoryLoading] = useState(false);
-  const [fileHistory, setFileHistory] = useState([]);
-
-  // 审批者和研究者（可以创建科室、新建文件体系、管理文件）：管理员 + 研究者 + 机构办秘书/主任 + 机构主任
-  const isApprover = hasRole(["admin", "pi", "secretary", "director", "chief"]);
+  // 审批者（可以创建科室）：管理员 + 机构办秘书/主任 + 机构主任
+  const isApprover = hasRole(["admin", "secretary", "director", "chief"]);
   // 研究者和审批者都可以新建专业组
   const canCreateGroup = hasRole(["admin", "pi", "secretary", "director", "chief"]);
 
@@ -190,12 +175,7 @@ function KeshiManagement() {
   };
 
   useEffect(() => {
-    // 防止 selectedGroupId 已变但 selectedGroup 还是旧值，导致用旧 groupPath 去查
-    if (
-      selectedGroupId &&
-      selectedGroup &&
-      Number(selectedGroup?.id) === Number(selectedGroupId)
-    ) {
+    if (selectedGroupId && selectedGroup) {
       fetchTeamMembers();
     } else {
       setTeamMembers([]);
@@ -378,555 +358,6 @@ function KeshiManagement() {
     return { level1: groupPath, level2: null };
   };
 
-  // ============ 文件体系相关函数 ============
-  // 格式化时间（LocalDateTime 数组格式：[year, month, day, hour, minute, second]）
-  const formatDate = (dateArray) => {
-    if (!dateArray || !Array.isArray(dateArray) || dateArray.length < 5) {
-      return "未知";
-    }
-    try {
-      const [year, month, day, hour = 0, minute = 0, second = 0] = dateArray;
-      const date = new Date(year, month - 1, day, hour, minute, second);
-      return date.toLocaleString("zh-CN", {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-      });
-    } catch {
-      return "未知";
-    }
-  };
-
-  // 获取文件体系列表
-  const fetchFileSystems = async () => {
-    setFileSystemsLoading(true);
-    try {
-      // 专业组详情页下：按当前科室 + 专业组路径过滤（后端已做权限校验，前端只负责透传）
-      const response = await institutionFileSystemApi.getList(
-        selectedKeshi?.keshi,
-        selectedGroup?.groupPath
-      );
-      if (response.success) {
-        setFileSystems(response.data || []);
-      } else {
-        message.error(response.message || "获取文件体系列表失败");
-        setFileSystems([]);
-      }
-    } catch (error) {
-      console.error("Failed to fetch file systems:", error);
-      message.error(error.message || "获取文件体系列表失败，请重试");
-      setFileSystems([]);
-    } finally {
-      setFileSystemsLoading(false);
-    }
-  };
-
-  // 当进入专业组详情页时，加载文件体系列表
-  useEffect(() => {
-    // 防止 selectedGroupId 已变但 selectedGroup 还是旧值，导致用旧 groupPath 去查
-    if (
-      selectedGroupId &&
-      selectedGroup &&
-      Number(selectedGroup?.id) === Number(selectedGroupId)
-    ) {
-      fetchFileSystems();
-    } else {
-      setFileSystems([]);
-      setSelectedFileSystem(null);
-      setFiles([]);
-    }
-  }, [selectedGroupId, selectedGroup]);
-
-  // 切换专业组时：重置“文件体系”Tab 内部状态，避免还停留在上一个专业组的文件列表/弹窗
-  useEffect(() => {
-    if (!selectedGroupId) return;
-
-    setSelectedFileSystem(null);
-    setFiles([]);
-
-    // 关闭并清理相关弹窗/临时态
-    setCreateFileSystemModalVisible(false);
-    fileSystemForm.resetFields();
-
-    setUploadModalVisible(false);
-    uploadForm.resetFields();
-
-    setOverwriteModalVisible(false);
-    overwriteForm.resetFields();
-
-    setHistoryModalVisible(false);
-    setFileHistory([]);
-
-    setSelectedFile(null);
-  }, [selectedGroupId]);
-
-  // 处理创建文件体系
-  const handleCreateFileSystem = async (values) => {
-    try {
-      const response = await institutionFileSystemApi.create(
-        {
-          systemCode: values.systemCode || undefined,
-          systemName: values.systemName,
-          description: values.description || undefined,
-        },
-        selectedKeshi?.keshi,
-        selectedGroup?.groupPath
-      );
-      if (response.success) {
-        message.success("创建文件体系成功");
-        setCreateFileSystemModalVisible(false);
-        fileSystemForm.resetFields();
-        await fetchFileSystems();
-      } else {
-        message.error(response.message || "创建文件体系失败");
-      }
-    } catch (error) {
-      console.error("Failed to create file system:", error);
-      message.error(error.message || "创建文件体系失败，请重试");
-    }
-  };
-
-  // 获取文件系统下的文件列表
-  const fetchFiles = async (systemId) => {
-    setFilesLoading(true);
-    try {
-      const response = await institutionFileSystemApi.getFilesBySystem(
-        systemId,
-        selectedKeshi?.keshi,
-        selectedGroup?.groupPath
-      );
-      if (response.success) {
-        setFiles(response.data || []);
-      } else {
-        message.error(response.message || "获取文件列表失败");
-        setFiles([]);
-      }
-    } catch (error) {
-      console.error("Failed to fetch files:", error);
-      message.error(error.message || "获取文件列表失败，请重试");
-      setFiles([]);
-    } finally {
-      setFilesLoading(false);
-    }
-  };
-
-  // 查看文件系统详情
-  const handleViewFiles = (system) => {
-    setSelectedFileSystem(system);
-    fetchFiles(system.id);
-  };
-
-  // 返回文件体系列表
-  const handleBackFromFiles = () => {
-    setSelectedFileSystem(null);
-    setFiles([]);
-  };
-
-  // 处理文件上传
-  const handleUpload = async (values) => {
-    const { fileList } = values;
-    if (!fileList || fileList.length === 0) {
-      message.warning("请选择要上传的文件");
-      return;
-    }
-
-    setUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append("systemId", selectedFileSystem.id);
-      
-      fileList.forEach((file) => {
-        const actualFile = file.originFileObj || file;
-        if (actualFile instanceof File) {
-          formData.append("files", actualFile);
-        }
-      });
-
-      const response = await institutionFileSystemApi.uploadFiles(
-        formData,
-        selectedKeshi?.keshi,
-        selectedGroup?.groupPath
-      );
-      if (response.success) {
-        message.success("文件上传成功");
-        setUploadModalVisible(false);
-        uploadForm.resetFields();
-        await fetchFiles(selectedFileSystem.id);
-      } else {
-        message.error(response.message || "文件上传失败");
-      }
-    } catch (error) {
-      console.error("Failed to upload files:", error);
-      message.error(error.message || "文件上传失败，请重试");
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  // 处理覆盖上传
-  const handleOverwrite = async (values) => {
-    const { file, remark } = values;
-    
-    if (!file || !Array.isArray(file) || file.length === 0) {
-      message.warning("请选择要上传的文件");
-      return;
-    }
-
-    const fileItem = file[0];
-    const actualFile = fileItem.originFileObj || fileItem;
-    
-    if (!(actualFile instanceof File)) {
-      message.warning("文件格式不正确，请重新选择");
-      return;
-    }
-
-    setOverwriting(true);
-    try {
-      const formData = new FormData();
-      formData.append("fileId", selectedFile.id);
-      formData.append("file", actualFile);
-      
-      if (remark) {
-        formData.append("remark", remark);
-      }
-
-      const response = await institutionFileSystemApi.overwriteFile(formData);
-      if (response.success) {
-        message.success("文件覆盖上传成功");
-        setOverwriteModalVisible(false);
-        overwriteForm.resetFields();
-        setSelectedFile(null);
-        await fetchFiles(selectedFileSystem.id);
-      } else {
-        message.error(response.message || "文件覆盖上传失败");
-      }
-    } catch (error) {
-      console.error("Failed to overwrite file:", error);
-      message.error(error.message || "文件覆盖上传失败，请重试");
-    } finally {
-      setOverwriting(false);
-    }
-  };
-
-  // 打开覆盖上传 Modal
-  const handleOpenOverwrite = (file) => {
-    setSelectedFile(file);
-    setOverwriteModalVisible(true);
-    overwriteForm.resetFields();
-  };
-
-  // 删除文件体系
-  const handleDeleteSystem = (system) => {
-    Modal.confirm({
-      title: "确认删除",
-      content: `确定要删除文件体系"${system.systemName}"吗？删除后该体系下的所有文件也将被删除，此操作不可恢复！`,
-      okText: "确定",
-      okType: "danger",
-      cancelText: "取消",
-      onOk: async () => {
-        try {
-          const response = await institutionFileSystemApi.deleteSystem(system.id);
-          if (response.success) {
-            message.success("文件体系删除成功");
-            if (selectedFileSystem && selectedFileSystem.id === system.id) {
-              setSelectedFileSystem(null);
-              setFiles([]);
-            }
-            await fetchFileSystems();
-          } else {
-            message.error(response.message || "文件体系删除失败");
-          }
-        } catch (error) {
-          console.error("Failed to delete system:", error);
-          message.error(error.message || "文件体系删除失败，请重试");
-        }
-      },
-    });
-  };
-
-  // 删除单个文件
-  const handleDeleteFile = (file) => {
-    Modal.confirm({
-      title: "确认删除",
-      content: `确定要删除文件"${file.fileName}"吗？此操作不可恢复！`,
-      okText: "确定",
-      okType: "danger",
-      cancelText: "取消",
-      onOk: async () => {
-        try {
-          const response = await institutionFileSystemApi.deleteFile(file.id);
-          if (response.success) {
-            message.success("文件删除成功");
-            if (selectedFileSystem) {
-              await fetchFiles(selectedFileSystem.id);
-            }
-          } else {
-            message.error(response.message || "文件删除失败");
-          }
-        } catch (error) {
-          console.error("Failed to delete file:", error);
-          message.error(error.message || "文件删除失败，请重试");
-        }
-      },
-    });
-  };
-
-  // 使文件失效（不删除）
-  const handleInvalidateFile = (file) => {
-    Modal.confirm({
-      title: "确认失效",
-      content: `确定要将文件"${file.fileName}"设为失效吗？失效后将无法覆盖上传，只能删除。`,
-      okText: "确定",
-      okType: "danger",
-      cancelText: "取消",
-      onOk: async () => {
-        try {
-          const response = await institutionFileSystemApi.invalidateFile(file.id);
-          if (response.success) {
-            message.success("文件已失效");
-            if (selectedFileSystem) {
-              await fetchFiles(selectedFileSystem.id);
-            }
-          } else {
-            message.error(response.message || "文件失效失败");
-          }
-        } catch (error) {
-          console.error("Failed to invalidate file:", error);
-          message.error(error.message || "文件失效失败，请重试");
-        }
-      },
-    });
-  };
-
-  // 查看文件历史记录
-  const handleViewHistory = async (file) => {
-    if (!file || !file.id) {
-      message.error("文件ID不存在，无法查询历史记录");
-      return;
-    }
-    
-    setSelectedFile(file);
-    setHistoryModalVisible(true);
-    setHistoryLoading(true);
-    try {
-      const response = await institutionFileSystemApi.getFileHistory(file.id);
-      if (response.success) {
-        setFileHistory(response.data || []);
-        if (!response.data || response.data.length === 0) {
-          message.info("该文件暂无历史记录");
-        }
-      } else {
-        message.error(response.message || "获取历史记录失败");
-        setFileHistory([]);
-      }
-    } catch (error) {
-      console.error("Failed to fetch file history:", error);
-      message.error(error.message || "获取历史记录失败，请重试");
-      setFileHistory([]);
-    } finally {
-      setHistoryLoading(false);
-    }
-  };
-
-  // 文件体系表格列定义
-  const fileSystemColumns = [
-    {
-      title: "ID",
-      dataIndex: "id",
-      key: "id",
-      width: 80,
-    },
-    {
-      title: "体系编码",
-      dataIndex: "systemCode",
-      key: "systemCode",
-      width: 150,
-      render: (text) => text || "-",
-    },
-    {
-      title: "体系名称",
-      dataIndex: "systemName",
-      key: "systemName",
-      ellipsis: true,
-    },
-    {
-      title: "创建时间",
-      key: "createdTime",
-      width: 180,
-      render: (_, record) => formatDate(record.createdTime),
-    },
-    {
-      title: "操作",
-      key: "action",
-      width: 200,
-      render: (_, record) => (
-        <Space>
-          <Button
-            type="link"
-            onClick={() => handleViewFiles(record)}
-          >
-            查看文件
-          </Button>
-          {isApprover && record?.isFixed !== true && (
-            <Button
-              type="link"
-              danger
-              icon={<DeleteOutlined />}
-              onClick={() => handleDeleteSystem(record)}
-            >
-              删除
-            </Button>
-          )}
-        </Space>
-      ),
-    },
-  ];
-
-  // 文件列表表格列定义
-  const fileColumns = [
-    {
-      title: "序号",
-      key: "index",
-      width: 70,
-      align: "center",
-      render: (_, __, index) => index + 1,
-    },
-    {
-      title: "文件ID",
-      dataIndex: "id",
-      key: "id",
-      width: 90,
-      align: "center",
-    },
-    {
-      title: "文件名",
-      dataIndex: "fileName",
-      key: "fileName",
-      width: 200,
-      ellipsis: {
-        showTitle: true,
-      },
-      render: (text) => (
-        <Space size="small">
-          <FileOutlined style={{ color: "#1890ff" }} />
-          <span style={{ maxWidth: 180, display: "inline-block" }} title={text}>
-            {text}
-          </span>
-        </Space>
-      ),
-    },
-    {
-      title: "文件",
-      key: "file",
-      width: 120,
-      render: (_, record) => (
-        <a
-          href={record.currentPath}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 4,
-            color: "#1890ff",
-          }}
-        >
-          <LinkOutlined />
-          <span>查看/下载</span>
-        </a>
-      ),
-    },
-    {
-      title: "状态",
-      key: "isActive",
-      width: 90,
-      align: "center",
-      render: (_, record) =>
-        record?.isActive === 0 ? (
-          <Tag color="default">已失效</Tag>
-        ) : (
-          <Tag color="green">生效</Tag>
-        ),
-    },
-    {
-      title: "创建人",
-      dataIndex: "createdBy",
-      key: "createdBy",
-      width: 100,
-      align: "center",
-      render: (text) => text || "未知",
-    },
-    {
-      title: "创建时间",
-      key: "createdTime",
-      width: 160,
-      render: (_, record) => formatDate(record.createdTime),
-    },
-    {
-      title: "更新时间",
-      key: "updatedTime",
-      width: 160,
-      render: (_, record) => formatDate(record.updatedTime),
-    },
-    {
-      title: "操作",
-      key: "action",
-      width: 380,
-      fixed: "right",
-      render: (_, record) => (
-        <Space size="small" wrap>
-          <Button
-            type="link"
-            size="small"
-            icon={<HistoryOutlined />}
-            onClick={() => handleViewHistory(record)}
-            style={{ padding: "0 4px" }}
-          >
-            历史
-          </Button>
-          {isApprover && (
-            <>
-              <Button
-                type="link"
-                size="small"
-                icon={<EditOutlined />}
-                disabled={record?.isActive === 0}
-                onClick={() => handleOpenOverwrite(record)}
-                style={{ padding: "0 4px" }}
-              >
-                覆盖
-              </Button>
-              <Button
-                type="link"
-                size="small"
-                danger
-                icon={<CloseCircleOutlined />}
-                disabled={record?.isActive === 0}
-                onClick={() => handleInvalidateFile(record)}
-                style={{ padding: "0 4px" }}
-              >
-                失效
-              </Button>
-              <Button
-                type="link"
-                size="small"
-                danger
-                icon={<DeleteOutlined />}
-                onClick={() => handleDeleteFile(record)}
-                style={{ padding: "0 4px" }}
-              >
-                删除
-              </Button>
-            </>
-          )}
-        </Space>
-      ),
-    },
-  ];
-
   const columns = [
     {
       title: "序号",
@@ -1006,9 +437,12 @@ function KeshiManagement() {
                 key: "basic",
                 label: "基本条件",
                 children: (
-                  <div style={{ color: "#999", fontSize: 14, textAlign: "center", padding: 40 }}>
-                    基本条件模块，后续开发
-                  </div>
+                  // 基本条件接口的 keshi 必须为「科室管理」里该科室的名称（如心血管），与当前点进哪个专业组无关
+                  <BasicConditionTab
+                    keshi={selectedKeshi?.keshi}
+                    groupPath={selectedGroup?.groupPath}
+                    currentUser={currentUser}
+                  />
                 ),
               },
               {
@@ -1145,114 +579,21 @@ function KeshiManagement() {
                 key: "facility",
                 label: "场地设施",
                 children: (
-                  <div style={{ color: "#999", fontSize: 14, textAlign: "center", padding: 40 }}>
-                    场地设施模块，后续开发
-                  </div>
+                  <SiteFacilityTab
+                    keshi={selectedKeshi?.keshi}
+                    groupPath={selectedGroup?.groupPath}
+                  />
                 ),
               },
               {
                 key: "files",
                 label: "文件体系",
                 children: (
-                  <div>
-                    {selectedFileSystem ? (
-                      // 文件列表视图
-                      <Card
-                        title={
-                          <Space>
-                            <Button
-                              type="text"
-                              icon={<ArrowLeftOutlined />}
-                              onClick={handleBackFromFiles}
-                              style={{ padding: 0, marginRight: 8 }}
-                            >
-                              返回
-                            </Button>
-                            <span>{selectedFileSystem.systemName}</span>
-                            {selectedFileSystem.systemCode && (
-                              <Tag color="blue">{selectedFileSystem.systemCode}</Tag>
-                            )}
-                          </Space>
-                        }
-                        extra={
-                          isApprover ? (
-                            <Button
-                              type="primary"
-                              icon={<UploadOutlined />}
-                              onClick={() => setUploadModalVisible(true)}
-                            >
-                              上传文件
-                            </Button>
-                          ) : null
-                        }
-                      >
-                        <Table
-                          dataSource={files}
-                          columns={fileColumns}
-                          rowKey="id"
-                          loading={filesLoading}
-                          scroll={{ x: 1200 }}
-                          rowClassName={(record) => (record?.isActive === 0 ? "row-inactive" : "")}
-                          pagination={{
-                            pageSize: 10,
-                            showSizeChanger: true,
-                            showTotal: (total) => `共 ${total} 个文件`,
-                          }}
-                          locale={{
-                            emptyText: "该文件体系下暂无文件",
-                          }}
-                        />
-                      </Card>
-                    ) : (
-                      // 文件体系列表视图
-                      <div>
-                        <div
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                            marginBottom: 16,
-                          }}
-                        >
-                          <Title level={4} style={{ margin: 0 }}>
-                            文件体系
-                          </Title>
-                          <Space>
-                            {isApprover && (
-                              <Button
-                                type="primary"
-                                icon={<PlusOutlined />}
-                                onClick={() => setCreateFileSystemModalVisible(true)}
-                              >
-                                新建文件体系
-                              </Button>
-                            )}
-                            <Button
-                              icon={<ReloadOutlined />}
-                              onClick={fetchFileSystems}
-                              loading={fileSystemsLoading}
-                            >
-                              刷新
-                            </Button>
-                          </Space>
-                        </div>
-                        <Table
-                          dataSource={fileSystems}
-                          columns={fileSystemColumns}
-                          rowKey="id"
-                          loading={fileSystemsLoading}
-                          pagination={{
-                            pageSize: 10,
-                            showSizeChanger: true,
-                            showTotal: (total) => `共 ${total} 条记录`,
-                          }}
-                          locale={{
-                            emptyText: "暂无文件体系",
-                          }}
-                        />
-                      </div>
-                    )}
-                  </div>
+                  <FileSystemTab
+                    keshi={selectedKeshi?.keshi}
+                    groupPath={selectedGroup?.groupPath}
+                    isApprover={isApprover}
+                  />
                 ),
               },
             ]}
@@ -1545,23 +886,1621 @@ function KeshiManagement() {
           </Form.Item>
         </Form>
       </Modal>
+    </div>
+  );
+}
 
-      {/* 文件体系相关 Modal */}
+/** keshi：科室名称，与 GET /user/basicCondition/detail?keshi= 及 report 请求体一致；groupPath 仅用于页面展示上下文 */
+function BasicConditionTab({ keshi, groupPath, currentUser }) {
+  const [form] = Form.useForm();
+  const [submitting, setSubmitting] = useState(false);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [detailList, setDetailList] = useState([]);
+
+  const campusOptions = useMemo(
+    () => [
+      { label: "江南院区", value: "江南院区" },
+      { label: "渝中院区", value: "渝中院区" },
+    ],
+    []
+  );
+
+  const fetchDetail = async () => {
+    if (!keshi) {
+      setDetailList([]);
+      return;
+    }
+    setLoadingDetail(true);
+    try {
+      // 始终传科室名 keshi（来自 listkeshi 的 keshi 字段），不传 groupPath
+      const res = await basicConditionApi.detail(keshi);
+      if (res?.success) {
+        setDetailList(res.data || []);
+      } else {
+        setDetailList([]);
+        message.error(res?.message || "获取基础条件详情失败");
+      }
+    } catch (e) {
+      console.error("获取基础条件详情失败:", e);
+      setDetailList([]);
+      message.error(e?.message || "获取基础条件详情失败，请重试");
+    } finally {
+      setLoadingDetail(false);
+    }
+  };
+
+  useEffect(() => {
+    // 切换专业组时重置表单（避免串数据）
+    form.resetFields();
+    form.setFieldsValue({
+      campusList: [],
+      bedCount: undefined,
+      inpatientCount: undefined,
+      avgDailyOutpatientCount: undefined,
+      diseaseSource: "",
+    });
+    fetchDetail();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [keshi, groupPath]);
+
+  const handleSubmit = async (values) => {
+    if (!keshi) {
+      message.error("未获取到科室信息，无法填报");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const campusListStr = Array.isArray(values.campusList)
+        ? values.campusList.filter(Boolean).join(",")
+        : "";
+
+      const payload = {
+        keshi,
+        createBy: currentUser?.id || currentUser?.username || "",
+        campusList: campusListStr || undefined,
+        bedCount: values.bedCount ?? undefined,
+        inpatientCount: values.inpatientCount ?? undefined,
+        avgDailyOutpatientCount: values.avgDailyOutpatientCount ?? undefined,
+        diseaseSource: values.diseaseSource?.trim() || undefined,
+      };
+
+      const res = await basicConditionApi.report(payload);
+      if (res?.success) {
+        message.success("基础条件填报成功");
+        fetchDetail();
+      } else {
+        message.error(res?.message || "基础条件填报失败");
+      }
+    } catch (e) {
+      console.error("基础条件填报失败:", e);
+      message.error(e?.message || "基础条件填报失败，请重试");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  /** 按 id 倒序，便于“最新一条”与列表阅读一致 */
+  const sortedDetailList = useMemo(() => {
+    const list = Array.isArray(detailList) ? [...detailList] : [];
+    return list.sort((a, b) => Number(b?.id ?? 0) - Number(a?.id ?? 0));
+  }, [detailList]);
+
+  const latestRecord = sortedDetailList[0] ?? null;
+
+  const fillFromRecord = (record) => {
+    if (!record) {
+      message.info("暂无可回填的数据");
+      return;
+    }
+    const campuses = (record.campusList || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    form.setFieldsValue({
+      campusList: campuses,
+      bedCount: record.bedCount ?? undefined,
+      inpatientCount: record.inpatientCount ?? undefined,
+      avgDailyOutpatientCount: record.avgDailyOutpatientCount ?? undefined,
+      diseaseSource: record.diseaseSource || "",
+    });
+    message.success("已回填到表单，可直接修改后再次提交");
+  };
+
+  const detailColumns = [
+    {
+      title: "序号",
+      key: "index",
+      width: 64,
+      align: "center",
+      render: (_, __, index) => index + 1,
+    },
+    {
+      title: "记录ID",
+      dataIndex: "id",
+      key: "id",
+      width: 88,
+      align: "center",
+    },
+    {
+      title: "创建人工号",
+      dataIndex: "createBy",
+      key: "createBy",
+      width: 110,
+      ellipsis: true,
+      render: (v) => v || "-",
+    },
+    {
+      title: "科室",
+      dataIndex: "keshi",
+      key: "keshi",
+      width: 120,
+      ellipsis: true,
+      render: (v) => v || "-",
+    },
+    {
+      title: "备案院区",
+      dataIndex: "campusList",
+      key: "campusList",
+      width: 200,
+      ellipsis: { showTitle: true },
+      render: (v) => v || "-",
+    },
+    {
+      title: "床位数",
+      dataIndex: "bedCount",
+      key: "bedCount",
+      width: 88,
+      align: "center",
+      render: (v) => (v === 0 || v ? v : "-"),
+    },
+    {
+      title: "住院人数（人次/年）",
+      dataIndex: "inpatientCount",
+      key: "inpatientCount",
+      width: 140,
+      align: "center",
+      render: (v) => (v === 0 || v ? v : "-"),
+    },
+    {
+      title: "平均日门急诊量（人次/日）",
+      dataIndex: "avgDailyOutpatientCount",
+      key: "avgDailyOutpatientCount",
+      width: 160,
+      align: "center",
+      render: (v) => (v === 0 || v ? v : "-"),
+    },
+    {
+      title: "病源病种",
+      dataIndex: "diseaseSource",
+      key: "diseaseSource",
+      ellipsis: { showTitle: true },
+      render: (v) => v || "-",
+    },
+    {
+      title: "操作",
+      key: "action",
+      width: 100,
+      fixed: "right",
+      render: (_, record) => (
+        <Button type="link" size="small" onClick={() => fillFromRecord(record)}>
+          回填
+        </Button>
+      ),
+    },
+  ];
+
+  return (
+    <Card bordered={false}>
+      <div style={{ marginBottom: 16 }}>
+        <Space size="large" wrap>
+          <div>
+            <Text type="secondary">科室：</Text>
+            <Text strong>{keshi || "-"}</Text>
+          </div>
+          <div>
+            <Text type="secondary">专业组：</Text>
+            <Text strong>{groupPath || "-"}</Text>
+          </div>
+        </Space>
+      </div>
+
+      <Card
+        size="small"
+        style={{ marginBottom: 24, background: "#fafafa" }}
+        title="已填报记录（展示）"
+        extra={
+          <Space>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              共 {sortedDetailList.length} 条
+            </Text>
+            <Button onClick={fetchDetail} loading={loadingDetail}>
+              刷新
+            </Button>
+            <Button
+              disabled={!latestRecord}
+              onClick={() => fillFromRecord(latestRecord)}
+            >
+              用最新一条回填
+            </Button>
+          </Space>
+        }
+      >
+        <Spin spinning={loadingDetail}>
+          <Table
+            size="small"
+            rowKey={(r) => r?.id ?? `${r?.createBy}-${r?.keshi}`}
+            dataSource={sortedDetailList}
+            columns={detailColumns}
+            pagination={{
+              pageSize: 10,
+              showSizeChanger: true,
+              showTotal: (t) => `共 ${t} 条`,
+            }}
+            scroll={{ x: 1100 }}
+            locale={{
+              emptyText: "暂无基础条件数据，请在下方「填报」区域提交",
+            }}
+          />
+        </Spin>
+      </Card>
+
+      <Card size="small" title="填报（提交后可在上方列表查看）">
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={handleSubmit}
+          initialValues={{
+            campusList: [],
+            bedCount: undefined,
+            inpatientCount: undefined,
+            avgDailyOutpatientCount: undefined,
+            diseaseSource: "",
+          }}
+        >
+          <div style={{ marginBottom: 12, color: "#666" }}>
+            提交会调用 <Text code>/user/basicCondition/report</Text>。
+            <Text code>keshi</Text> 固定为当前科室名称（如{" "}
+            <Text strong>{keshi || "—"}</Text>
+            ），与所选专业组无关。
+          </div>
+          <Row gutter={16}>
+          <Col xs={24} md={12}>
+            <Form.Item
+              label="备案院区（可多选）"
+              name="campusList"
+              rules={[
+                {
+                  validator: (_, v) => {
+                    if (!v || (Array.isArray(v) && v.length === 0)) {
+                      return Promise.resolve();
+                    }
+                    if (!Array.isArray(v)) {
+                      return Promise.reject(new Error("备案院区格式不正确"));
+                    }
+                    return Promise.resolve();
+                  },
+                },
+              ]}
+            >
+              <Select
+                mode="multiple"
+                allowClear
+                placeholder="请选择备案院区"
+                options={campusOptions}
+              />
+            </Form.Item>
+          </Col>
+
+          <Col xs={24} md={12}>
+            <Form.Item
+              label="床位数（XXXX年）"
+              name="bedCount"
+              rules={[
+                { type: "number", min: 0, message: "床位数不能小于 0" },
+              ]}
+            >
+              <Input
+                inputMode="numeric"
+                placeholder="请输入床位数"
+                onChange={(e) => {
+                  const v = e.target.value;
+                  const n = v === "" ? undefined : Number(v);
+                  if (v === "" || Number.isFinite(n)) {
+                    form.setFieldValue("bedCount", v === "" ? undefined : n);
+                  }
+                }}
+              />
+            </Form.Item>
+          </Col>
+
+          <Col xs={24} md={12}>
+            <Form.Item
+              label="住院人数（XXXX年，人次/年）"
+              name="inpatientCount"
+              rules={[
+                { type: "number", min: 0, message: "住院人数不能小于 0" },
+              ]}
+            >
+              <Input
+                inputMode="numeric"
+                placeholder="请输入住院人数"
+                onChange={(e) => {
+                  const v = e.target.value;
+                  const n = v === "" ? undefined : Number(v);
+                  if (v === "" || Number.isFinite(n)) {
+                    form.setFieldValue("inpatientCount", v === "" ? undefined : n);
+                  }
+                }}
+              />
+            </Form.Item>
+          </Col>
+
+          <Col xs={24} md={12}>
+            <Form.Item
+              label="平均日门急诊量（XXXX年，人次/日）"
+              name="avgDailyOutpatientCount"
+              rules={[
+                { type: "number", min: 0, message: "平均日门急诊量不能小于 0" },
+              ]}
+            >
+              <Input
+                inputMode="numeric"
+                placeholder="请输入平均日门急诊量"
+                onChange={(e) => {
+                  const v = e.target.value;
+                  const n = v === "" ? undefined : Number(v);
+                  if (v === "" || Number.isFinite(n)) {
+                    form.setFieldValue(
+                      "avgDailyOutpatientCount",
+                      v === "" ? undefined : n
+                    );
+                  }
+                }}
+              />
+            </Form.Item>
+          </Col>
+
+          <Col span={24}>
+            <Form.Item label="病源病种" name="diseaseSource">
+              <TextArea
+                rows={4}
+                placeholder="请输入病源病种"
+                showCount
+                maxLength={500}
+              />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Form.Item>
+          <Space>
+            <Button type="primary" htmlType="submit" loading={submitting}>
+              提交填报
+            </Button>
+            <Button
+              onClick={() => {
+                form.resetFields();
+              }}
+            >
+              重置
+            </Button>
+          </Space>
+        </Form.Item>
+        </Form>
+      </Card>
+    </Card>
+  );
+}
+
+/** 场地设施：当前含「受试者接待室」填报；后续同类接口可在此 Tab 内继续增加卡片区块 */
+function SiteFacilityTab({ keshi, groupPath }) {
+  const [form] = Form.useForm();
+  const [submitting, setSubmitting] = useState(false);
+  const [detailList, setDetailList] = useState([]);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+
+  const campusOptions = useMemo(
+    () => [
+      { label: "江南", value: "江南" },
+      { label: "渝中", value: "渝中" },
+    ],
+    []
+  );
+
+  const fetchReceptionRoomDetail = async () => {
+    if (!keshi) {
+      setDetailList([]);
+      return;
+    }
+    setLoadingDetail(true);
+    try {
+      const res = await siteFacilityApi.getReceptionRoomDetail(keshi);
+      if (res?.success) {
+        setDetailList(res.data || []);
+      } else {
+        setDetailList([]);
+        message.error(res?.message || "获取受试者接待室详情失败");
+      }
+    } catch (e) {
+      console.error("获取受试者接待室详情失败:", e);
+      setDetailList([]);
+      message.error(e?.message || "获取受试者接待室详情失败");
+    } finally {
+      setLoadingDetail(false);
+    }
+  };
+
+  useEffect(() => {
+    form.resetFields();
+    fetchReceptionRoomDetail();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [keshi, groupPath]);
+
+  const formatCanMeetNeed = (v) => {
+    if (v === "1" || v === 1) return "是";
+    if (v === "0" || v === 0) return "否";
+    return v === undefined || v === null || v === "" ? "-" : String(v);
+  };
+
+  const isLikelyImageUrl = (url) => {
+    if (!url || typeof url !== "string") return false;
+    return /\.(jpe?g|png|gif|webp|bmp|svg)$/i.test(url.split("?")[0]);
+  };
+
+  const receptionRoomColumns = [
+    {
+      title: "院区",
+      dataIndex: "campus",
+      key: "campus",
+      width: 160,
+      ellipsis: true,
+      render: (v) => (v != null ? String(v).trim() : "-"),
+    },
+    {
+      title: "地点",
+      dataIndex: "location",
+      key: "location",
+      ellipsis: { showTitle: true },
+      render: (v) => v || "-",
+    },
+    {
+      title: "照片",
+      dataIndex: "photo",
+      key: "photo",
+      width: 200,
+      render: (url) => {
+        if (!url) return "-";
+        return (
+          <Space direction="vertical" size={4}>
+            {isLikelyImageUrl(url) ? (
+              <a href={url} target="_blank" rel="noopener noreferrer">
+                <img
+                  alt=""
+                  src={url}
+                  style={{ maxWidth: 120, maxHeight: 72, objectFit: "cover", display: "block" }}
+                />
+              </a>
+            ) : null}
+            <a href={url} target="_blank" rel="noopener noreferrer">
+              查看/下载
+            </a>
+          </Space>
+        );
+      },
+    },
+    {
+      title: "是否能够满足知情同意及随访等需要",
+      dataIndex: "canMeetNeed",
+      key: "canMeetNeed",
+      width: 220,
+      align: "center",
+      render: (v) => formatCanMeetNeed(v),
+    },
+  ];
+
+  const onFinish = async (values) => {
+    if (!keshi) {
+      message.error("未获取到科室信息，无法提交");
+      return;
+    }
+    const fileList = values.photo;
+    const fileItem = fileList?.[0];
+    const file = fileItem?.originFileObj ?? fileItem;
+    if (!(file instanceof File)) {
+      message.error("请上传照片");
+      return;
+    }
+    const campuses = Array.isArray(values.campus)
+      ? values.campus.filter(Boolean)
+      : [];
+    if (campuses.length === 0) {
+      message.error("请至少选择一个院区");
+      return;
+    }
+    const campusStr = campuses.join(",");
+    setSubmitting(true);
+    try {
+      const formData = new FormData();
+      formData.append("keshi", keshi);
+      formData.append("campus", campusStr);
+      formData.append("location", (values.location || "").trim());
+      formData.append("photo", file);
+      formData.append("canMeetNeed", String(values.canMeetNeed));
+
+      const res = await siteFacilityApi.reportReceptionRoom(formData);
+      if (res?.success) {
+        message.success("受试者接待室填报成功");
+        form.resetFields();
+        fetchReceptionRoomDetail();
+      } else {
+        message.error(res?.message || "提交失败");
+      }
+    } catch (e) {
+      console.error("受试者接待室填报失败:", e);
+      message.error(e?.message || "提交失败，请重试");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div>
+      <div style={{ marginBottom: 16 }}>
+        <Space size="large" wrap>
+          <div>
+            <Text type="secondary">科室：</Text>
+            <Text strong>{keshi || "-"}</Text>
+          </div>
+          <div>
+            <Text type="secondary">专业组：</Text>
+            <Text strong>{groupPath || "-"}</Text>
+          </div>
+        </Space>
+      </div>
+
+      <Card
+        size="small"
+        style={{ marginBottom: 16, background: "#fafafa" }}
+        title="受试者接待室（已填报记录）"
+        extra={
+          <Space>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              共 {detailList.length} 条
+            </Text>
+            <Button onClick={fetchReceptionRoomDetail} loading={loadingDetail}>
+              刷新
+            </Button>
+          </Space>
+        }
+      >
+        <Spin spinning={loadingDetail}>
+          <Table
+            size="small"
+            rowKey={(_, index) => `rr-${index}`}
+            dataSource={detailList}
+            columns={receptionRoomColumns}
+            pagination={{
+              pageSize: 10,
+              showSizeChanger: true,
+              showTotal: (t) => `共 ${t} 条`,
+            }}
+            scroll={{ x: 900 }}
+            locale={{
+              emptyText: "暂无记录，请在下方填报提交",
+            }}
+          />
+        </Spin>
+      </Card>
+
+      <Card size="small" title="受试者接待室（填报）">
+        <Form form={form} layout="vertical" onFinish={onFinish}>
+          <Form.Item
+            label="院区"
+            name="campus"
+            rules={[{ required: true, message: "请选择院区" }]}
+            extra="可多选，提交时合并为「江南」或「江南,渝中」等形式传给后端"
+          >
+            <Select
+              mode="multiple"
+              allowClear
+              placeholder="请选择院区（可多选）"
+              options={campusOptions}
+            />
+          </Form.Item>
+
+          <Form.Item
+            label="地点"
+            name="location"
+            rules={[{ required: true, message: "请输入地点" }]}
+          >
+            <Input placeholder="请输入地点" />
+          </Form.Item>
+
+          <Form.Item
+            label="照片"
+            name="photo"
+            valuePropName="fileList"
+            getValueFromEvent={(e) => {
+              if (Array.isArray(e)) return e;
+              return e?.fileList ?? [];
+            }}
+            rules={[
+              {
+                validator: (_, fileList) => {
+                  if (!fileList || fileList.length === 0) {
+                    return Promise.reject(new Error("请上传照片"));
+                  }
+                  return Promise.resolve();
+                },
+              },
+            ]}
+          >
+            <Upload
+              beforeUpload={() => false}
+              maxCount={1}
+              listType="picture-card"
+              accept="image/*"
+            >
+              <div>
+                <UploadOutlined />
+                <div style={{ marginTop: 8 }}>上传</div>
+              </div>
+            </Upload>
+          </Form.Item>
+
+          <Form.Item
+            label="是否能够满足知情同意及随访等需要"
+            name="canMeetNeed"
+            rules={[{ required: true, message: "请选择是或否" }]}
+          >
+            <Radio.Group>
+              <Radio value={1}>是</Radio>
+              <Radio value={0}>否</Radio>
+            </Radio.Group>
+          </Form.Item>
+
+          <Form.Item>
+            <Space>
+              <Button type="primary" htmlType="submit" loading={submitting}>
+                提交
+              </Button>
+              <Button onClick={() => form.resetFields()}>重置</Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Card>
+
+      <p className="small muted" style={{ marginTop: 16, marginBottom: 0 }}>
+        其他场地设施子模块可在后续接口就绪后，在本 Tab 内继续增加表单区块。
+      </p>
+    </div>
+  );
+}
+
+// 文件体系Tab组件（用于科室管理页面）
+function FileSystemTab({ keshi, groupPath, isApprover }) {
+  const [fileSystems, setFileSystems] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [form] = Form.useForm();
+  
+  // 文件详情相关状态
+  const [selectedSystem, setSelectedSystem] = useState(null);
+  const [files, setFiles] = useState([]);
+  const [filesLoading, setFilesLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadModalVisible, setUploadModalVisible] = useState(false);
+  const [uploadForm] = Form.useForm();
+  
+  // 覆盖上传相关状态
+  const [overwriteModalVisible, setOverwriteModalVisible] = useState(false);
+  const [overwriting, setOverwriting] = useState(false);
+  const [overwriteForm] = Form.useForm();
+  const [selectedFile, setSelectedFile] = useState(null);
+  
+  // 历史记录相关状态
+  const [historyModalVisible, setHistoryModalVisible] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [fileHistory, setFileHistory] = useState([]);
+
+  // 获取文件体系列表
+  const fetchFileSystems = async () => {
+    setLoading(true);
+    try {
+      const response = await institutionFileSystemApi.getList(keshi, groupPath);
+      if (response.success) {
+        setFileSystems(response.data || []);
+      } else {
+        message.error(response.message || "获取文件体系列表失败");
+        setFileSystems([]);
+      }
+    } catch (error) {
+      console.error("Failed to fetch file systems:", error);
+      message.error(error.message || "获取文件体系列表失败，请重试");
+      setFileSystems([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchFileSystems();
+  }, [keshi, groupPath]);
+
+  // 处理创建文件体系
+  const handleCreate = async (values) => {
+    try {
+      const response = await institutionFileSystemApi.create(
+        {
+          systemCode: values.systemCode || undefined,
+          systemName: values.systemName,
+          description: values.description || undefined,
+        },
+        keshi,
+        groupPath
+      );
+      if (response.success) {
+        message.success("创建文件体系成功");
+        setCreateModalVisible(false);
+        form.resetFields();
+        await fetchFileSystems();
+      } else {
+        message.error(response.message || "创建文件体系失败");
+      }
+    } catch (error) {
+      console.error("Failed to create file system:", error);
+      message.error(error.message || "创建文件体系失败，请重试");
+    }
+  };
+
+  // 格式化时间
+  const formatDate = (dateArray) => {
+    if (!dateArray || !Array.isArray(dateArray) || dateArray.length < 5) {
+      return "未知";
+    }
+    try {
+      const [year, month, day, hour = 0, minute = 0, second = 0] = dateArray;
+      const date = new Date(year, month - 1, day, hour, minute, second);
+      return date.toLocaleString("zh-CN", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      });
+    } catch {
+      return "未知";
+    }
+  };
+
+  // 获取文件系统下的文件列表
+  const fetchFiles = async (systemId) => {
+    setFilesLoading(true);
+    try {
+      const response = await institutionFileSystemApi.getFilesBySystem(systemId, keshi, groupPath);
+      if (response.success) {
+        setFiles(response.data || []);
+      } else {
+        message.error(response.message || "获取文件列表失败");
+        setFiles([]);
+      }
+    } catch (error) {
+      console.error("Failed to fetch files:", error);
+      message.error(error.message || "获取文件列表失败，请重试");
+      setFiles([]);
+    } finally {
+      setFilesLoading(false);
+    }
+  };
+
+  // 查看文件系统详情
+  const handleViewFiles = (system) => {
+    setSelectedSystem(system);
+    fetchFiles(system.id);
+  };
+
+  // 返回文件体系列表
+  const handleBack = () => {
+    setSelectedSystem(null);
+    setFiles([]);
+  };
+
+  // 处理文件上传
+  const handleUpload = async (values) => {
+    const { fileList } = values;
+    if (!fileList || fileList.length === 0) {
+      message.warning("请选择要上传的文件");
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("systemId", selectedSystem.id);
+      
+      fileList.forEach((file) => {
+        const actualFile = file.originFileObj || file;
+        if (actualFile instanceof File) {
+          formData.append("files", actualFile);
+        }
+      });
+
+      const response = await institutionFileSystemApi.uploadFiles(formData, keshi, groupPath);
+      if (response.success) {
+        message.success("文件上传成功");
+        setUploadModalVisible(false);
+        uploadForm.resetFields();
+        await fetchFiles(selectedSystem.id);
+      } else {
+        message.error(response.message || "文件上传失败");
+      }
+    } catch (error) {
+      console.error("Failed to upload files:", error);
+      message.error(error.message || "文件上传失败，请重试");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // 处理覆盖上传
+  const handleOverwrite = async (values) => {
+    const { file, remark } = values;
+    
+    if (!file || !Array.isArray(file) || file.length === 0) {
+      message.warning("请选择要上传的文件");
+      return;
+    }
+
+    const fileItem = file[0];
+    const actualFile = fileItem.originFileObj || fileItem;
+    
+    if (!(actualFile instanceof File)) {
+      message.warning("文件格式不正确，请重新选择");
+      return;
+    }
+
+    setOverwriting(true);
+    try {
+      const formData = new FormData();
+      formData.append("fileId", selectedFile.id);
+      formData.append("file", actualFile);
+      
+      if (remark) {
+        formData.append("remark", remark);
+      }
+
+      const response = await institutionFileSystemApi.overwriteFile(formData);
+      if (response.success) {
+        message.success("文件覆盖上传成功");
+        setOverwriteModalVisible(false);
+        overwriteForm.resetFields();
+        setSelectedFile(null);
+        await fetchFiles(selectedSystem.id);
+      } else {
+        message.error(response.message || "文件覆盖上传失败");
+      }
+    } catch (error) {
+      console.error("Failed to overwrite file:", error);
+      message.error(error.message || "文件覆盖上传失败，请重试");
+    } finally {
+      setOverwriting(false);
+    }
+  };
+
+  // 打开覆盖上传 Modal
+  const handleOpenOverwrite = (file) => {
+    setSelectedFile(file);
+    setOverwriteModalVisible(true);
+    overwriteForm.resetFields();
+  };
+
+  // 删除文件体系
+  const handleDeleteSystem = (system) => {
+    Modal.confirm({
+      title: "确认删除",
+      content: `确定要删除文件体系"${system.systemName}"吗？删除后该体系下的所有文件也将被删除，此操作不可恢复！`,
+      okText: "确定",
+      okType: "danger",
+      cancelText: "取消",
+      onOk: async () => {
+        try {
+          const response = await institutionFileSystemApi.deleteSystem(system.id);
+          if (response.success) {
+            message.success("文件体系删除成功");
+            if (selectedSystem && selectedSystem.id === system.id) {
+              setSelectedSystem(null);
+              setFiles([]);
+            }
+            await fetchFileSystems();
+          } else {
+            message.error(response.message || "文件体系删除失败");
+          }
+        } catch (error) {
+          console.error("Failed to delete system:", error);
+          message.error(error.message || "文件体系删除失败，请重试");
+        }
+      },
+    });
+  };
+
+  // 删除单个文件
+  const handleDeleteFile = (file) => {
+    Modal.confirm({
+      title: "确认删除",
+      content: `确定要删除文件"${file.fileName}"吗？此操作不可恢复！`,
+      okText: "确定",
+      okType: "danger",
+      cancelText: "取消",
+      onOk: async () => {
+        try {
+          const response = await institutionFileSystemApi.deleteFile(file.id);
+          if (response.success) {
+            message.success("文件删除成功");
+            if (selectedSystem) {
+              await fetchFiles(selectedSystem.id);
+            }
+          } else {
+            message.error(response.message || "文件删除失败");
+          }
+        } catch (error) {
+          console.error("Failed to delete file:", error);
+          message.error(error.message || "文件删除失败，请重试");
+        }
+      },
+    });
+  };
+
+  // 使文件失效
+  const handleInvalidateFile = (file) => {
+    Modal.confirm({
+      title: "确认失效",
+      content: `确定要将文件"${file.fileName}"设为失效吗？失效后将无法覆盖上传，只能删除。`,
+      okText: "确定",
+      okType: "danger",
+      cancelText: "取消",
+      onOk: async () => {
+        try {
+          const response = await institutionFileSystemApi.invalidateFile(file.id);
+          if (response.success) {
+            message.success("文件已失效");
+            if (selectedSystem) {
+              await fetchFiles(selectedSystem.id);
+            }
+          } else {
+            message.error(response.message || "文件失效失败");
+          }
+        } catch (error) {
+          console.error("Failed to invalidate file:", error);
+          message.error(error.message || "文件失效失败，请重试");
+        }
+      },
+    });
+  };
+
+  // 查看文件历史记录
+  const handleViewHistory = async (file) => {
+    if (!file || !file.id) {
+      message.error("文件ID不存在，无法查询历史记录");
+      return;
+    }
+    
+    setSelectedFile(file);
+    setHistoryModalVisible(true);
+    setHistoryLoading(true);
+    try {
+      const response = await institutionFileSystemApi.getFileHistory(file.id);
+      if (response.success) {
+        setFileHistory(response.data || []);
+        if (!response.data || response.data.length === 0) {
+          message.info("该文件暂无历史记录");
+        }
+      } else {
+        message.error(response.message || "获取历史记录失败");
+        setFileHistory([]);
+      }
+    } catch (error) {
+      console.error("Failed to fetch file history:", error);
+      message.error(error.message || "获取历史记录失败，请重试");
+      setFileHistory([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  // 表格列定义
+  const columns = [
+    {
+      title: "ID",
+      dataIndex: "id",
+      key: "id",
+      width: 80,
+    },
+    {
+      title: "体系编码",
+      dataIndex: "systemCode",
+      key: "systemCode",
+      width: 150,
+      render: (text) => text || "-",
+    },
+    {
+      title: "体系名称",
+      dataIndex: "systemName",
+      key: "systemName",
+      ellipsis: true,
+    },
+    {
+      title: "创建时间",
+      key: "createdTime",
+      width: 180,
+      render: (_, record) => formatDate(record.createdTime),
+    },
+    {
+      title: "操作",
+      key: "action",
+      width: 200,
+      render: (_, record) => (
+        <Space>
+          <Button
+            type="link"
+            onClick={() => handleViewFiles(record)}
+          >
+            查看文件
+          </Button>
+          {isApprover && record?.isFixed !== true && (
+            <Button
+              type="link"
+              danger
+              icon={<DeleteOutlined />}
+              onClick={() => handleDeleteSystem(record)}
+            >
+              删除
+            </Button>
+          )}
+        </Space>
+      ),
+    },
+  ];
+
+  // 文件列表表格列定义
+  const fileColumns = [
+    {
+      title: "序号",
+      key: "index",
+      width: 70,
+      align: "center",
+      render: (_, __, index) => index + 1,
+    },
+    {
+      title: "文件ID",
+      dataIndex: "id",
+      key: "id",
+      width: 90,
+      align: "center",
+    },
+    {
+      title: "文件名",
+      dataIndex: "fileName",
+      key: "fileName",
+      width: 200,
+      ellipsis: {
+        showTitle: true,
+      },
+      render: (text) => (
+        <Space size="small">
+          <FileOutlined style={{ color: "#1890ff" }} />
+          <span style={{ maxWidth: 180, display: "inline-block" }} title={text}>
+            {text}
+          </span>
+        </Space>
+      ),
+    },
+    {
+      title: "文件",
+      key: "file",
+      width: 120,
+      render: (_, record) => (
+        <a
+          href={record.currentPath}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 4,
+            color: "#1890ff",
+          }}
+        >
+          <LinkOutlined />
+          <span>查看/下载</span>
+        </a>
+      ),
+    },
+    {
+      title: "状态",
+      key: "isActive",
+      width: 90,
+      align: "center",
+      render: (_, record) =>
+        record?.isActive === 0 ? (
+          <Tag color="default">已失效</Tag>
+        ) : (
+          <Tag color="green">生效</Tag>
+        ),
+    },
+    {
+      title: "创建人",
+      dataIndex: "createdBy",
+      key: "createdBy",
+      width: 100,
+      align: "center",
+      render: (text) => text || "未知",
+    },
+    {
+      title: "创建时间",
+      key: "createdTime",
+      width: 160,
+      render: (_, record) => formatDate(record.createdTime),
+    },
+    {
+      title: "更新时间",
+      key: "updatedTime",
+      width: 160,
+      render: (_, record) => formatDate(record.updatedTime),
+    },
+    {
+      title: "操作",
+      key: "action",
+      width: 380,
+      fixed: "right",
+      render: (_, record) => (
+        <Space size="small" wrap>
+          <Button
+            type="link"
+            size="small"
+            icon={<HistoryOutlined />}
+            onClick={() => handleViewHistory(record)}
+            style={{ padding: "0 4px" }}
+          >
+            历史
+          </Button>
+          {isApprover && (
+            <>
+              <Button
+                type="link"
+                size="small"
+                icon={<EditOutlined />}
+                disabled={record?.isActive === 0}
+                onClick={() => handleOpenOverwrite(record)}
+                style={{ padding: "0 4px" }}
+              >
+                覆盖
+              </Button>
+              <Button
+                type="link"
+                size="small"
+                danger
+                icon={<CloseCircleOutlined />}
+                disabled={record?.isActive === 0}
+                onClick={() => handleInvalidateFile(record)}
+                style={{ padding: "0 4px" }}
+              >
+                失效
+              </Button>
+              <Button
+                type="link"
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+                onClick={() => handleDeleteFile(record)}
+                style={{ padding: "0 4px" }}
+              >
+                删除
+              </Button>
+            </>
+          )}
+        </Space>
+      ),
+    },
+  ];
+
+  // 如果选择了文件系统，显示文件列表
+  if (selectedSystem) {
+    return (
+      <div>
+        <Card
+          title={
+            <Space>
+              <Button
+                type="text"
+                icon={<ArrowLeftOutlined />}
+                onClick={handleBack}
+                style={{ padding: 0, marginRight: 8 }}
+              >
+                返回
+              </Button>
+              <span>{selectedSystem.systemName}</span>
+              {selectedSystem.systemCode && (
+                <Tag color="blue">{selectedSystem.systemCode}</Tag>
+              )}
+            </Space>
+          }
+          extra={
+            isApprover ? (
+              <Button
+                type="primary"
+                icon={<UploadOutlined />}
+                onClick={() => setUploadModalVisible(true)}
+              >
+                上传文件
+              </Button>
+            ) : null
+          }
+        >
+          <Table
+            dataSource={files}
+            columns={fileColumns}
+            rowKey="id"
+            loading={filesLoading}
+            scroll={{ x: 1200 }}
+            rowClassName={(record) => (record?.isActive === 0 ? "row-inactive" : "")}
+            pagination={{
+              pageSize: 10,
+              showSizeChanger: true,
+              showTotal: (total) => `共 ${total} 个文件`,
+            }}
+            locale={{
+              emptyText: "该文件体系下暂无文件",
+            }}
+          />
+        </Card>
+
+        <style>{`
+          .row-inactive {
+            background-color: #fafafa;
+            color: #999;
+          }
+          .row-inactive a {
+            color: #999 !important;
+          }
+        `}</style>
+
+        {/* 上传文件 Modal */}
+        <Modal
+          title="上传文件"
+          open={uploadModalVisible}
+          onCancel={() => {
+            setUploadModalVisible(false);
+            uploadForm.resetFields();
+          }}
+          footer={null}
+          width={600}
+        >
+          <Form
+            form={uploadForm}
+            layout="vertical"
+            onFinish={handleUpload}
+            style={{ marginTop: 24 }}
+          >
+            <Form.Item
+              label="选择文件"
+              name="fileList"
+              valuePropName="fileList"
+              getValueFromEvent={(e) => {
+                if (Array.isArray(e)) {
+                  return e;
+                }
+                return e?.fileList;
+              }}
+              rules={[
+                {
+                  required: true,
+                  message: "请选择要上传的文件",
+                },
+                {
+                  validator: (_, value) => {
+                    if (!value || value.length === 0) {
+                      return Promise.reject(new Error("请至少选择一个文件"));
+                    }
+                    return Promise.resolve();
+                  },
+                },
+              ]}
+            >
+              <Dragger
+                multiple
+                beforeUpload={() => false}
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.jpg,.jpeg,.png,.zip,.rar"
+              >
+                <p className="ant-upload-drag-icon">
+                  <InboxOutlined />
+                </p>
+                <p className="ant-upload-text">
+                  点击或拖拽文件到此区域上传
+                </p>
+                <p className="ant-upload-hint">
+                  支持多文件上传，支持 PDF、Word、Excel、图片、压缩包等格式
+                </p>
+              </Dragger>
+            </Form.Item>
+
+            <Form.Item>
+              <Space>
+                <Button
+                  type="primary"
+                  htmlType="submit"
+                  loading={uploading}
+                  icon={<UploadOutlined />}
+                >
+                  上传
+                </Button>
+                <Button
+                  onClick={() => {
+                    setUploadModalVisible(false);
+                    uploadForm.resetFields();
+                  }}
+                >
+                  取消
+                </Button>
+              </Space>
+            </Form.Item>
+          </Form>
+        </Modal>
+
+        {/* 覆盖上传 Modal */}
+        <Modal
+          title={`覆盖上传 - ${selectedFile?.fileName || ""}`}
+          open={overwriteModalVisible}
+          onCancel={() => {
+            setOverwriteModalVisible(false);
+            overwriteForm.resetFields();
+            setSelectedFile(null);
+          }}
+          footer={null}
+          width={600}
+        >
+          <Form
+            form={overwriteForm}
+            layout="vertical"
+            onFinish={handleOverwrite}
+            style={{ marginTop: 24 }}
+          >
+            <Form.Item
+              label="选择新文件"
+              name="file"
+              rules={[
+                {
+                  required: true,
+                  message: "请选择要上传的文件",
+                },
+                {
+                  validator: (_, value) => {
+                    if (!value || !Array.isArray(value) || value.length === 0) {
+                      return Promise.reject(new Error("请选择要上传的文件"));
+                    }
+                    return Promise.resolve();
+                  },
+                },
+              ]}
+              valuePropName="fileList"
+              getValueFromEvent={(e) => {
+                if (Array.isArray(e)) {
+                  return e;
+                }
+                return e?.fileList || [];
+              }}
+            >
+              <Upload
+                beforeUpload={() => false}
+                maxCount={1}
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.jpg,.jpeg,.png,.zip,.rar"
+              >
+                <Button icon={<UploadOutlined />}>选择文件</Button>
+              </Upload>
+            </Form.Item>
+
+            <Form.Item
+              label="备注（可选）"
+              name="remark"
+              rules={[
+                {
+                  max: 200,
+                  message: "备注不能超过200个字符",
+                },
+              ]}
+            >
+              <Input.TextArea
+                rows={3}
+                placeholder="请输入备注信息（可选）"
+                showCount
+                maxLength={200}
+              />
+            </Form.Item>
+
+            <Form.Item>
+              <Space>
+                <Button
+                  type="primary"
+                  htmlType="submit"
+                  loading={overwriting}
+                  icon={<EditOutlined />}
+                >
+                  覆盖上传
+                </Button>
+                <Button
+                  onClick={() => {
+                    setOverwriteModalVisible(false);
+                    overwriteForm.resetFields();
+                    setSelectedFile(null);
+                  }}
+                >
+                  取消
+                </Button>
+              </Space>
+            </Form.Item>
+          </Form>
+        </Modal>
+
+        {/* 历史记录 Modal */}
+        <Modal
+          title={`文件历史记录 - ${selectedFile?.fileName || ""}`}
+          open={historyModalVisible}
+          onCancel={() => {
+            setHistoryModalVisible(false);
+            setSelectedFile(null);
+            setFileHistory([]);
+          }}
+          footer={[
+            <Button
+              key="close"
+              onClick={() => {
+                setHistoryModalVisible(false);
+                setSelectedFile(null);
+                setFileHistory([]);
+              }}
+            >
+              关闭
+            </Button>,
+          ]}
+          width={800}
+        >
+          <Table
+            dataSource={fileHistory}
+            columns={[
+              {
+                title: "文件名",
+                dataIndex: "fileName",
+                key: "fileName",
+                ellipsis: true,
+                render: (text, record) => (
+                  <Space>
+                    <FileOutlined />
+                    <span>{text}</span>
+                  </Space>
+                ),
+              },
+              {
+                title: "文件",
+                key: "file",
+                width: 200,
+                render: (_, record) => (
+                  <a
+                    href={record.currentPath}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
+                      color: "#1890ff",
+                    }}
+                  >
+                    <LinkOutlined />
+                    <span>查看/下载</span>
+                  </a>
+                ),
+              },
+              {
+                title: "操作人",
+                dataIndex: "operatedBy",
+                key: "operatedBy",
+                width: 120,
+                render: (text) => text || "未知",
+              },
+              {
+                title: "备注",
+                dataIndex: "remark",
+                key: "remark",
+                ellipsis: true,
+                render: (text) => text || "-",
+              },
+              {
+                title: "操作时间",
+                key: "createdTime",
+                width: 180,
+                render: (_, record) => formatDate(record.createdTime),
+              },
+            ]}
+            rowKey="id"
+            loading={historyLoading}
+            pagination={{
+              pageSize: 10,
+              showSizeChanger: true,
+              showTotal: (total) => `共 ${total} 条历史记录`,
+            }}
+            locale={{
+              emptyText: "暂无历史记录",
+            }}
+          />
+        </Modal>
+      </div>
+    );
+  }
+
+  // 文件体系列表视图
+  return (
+    <div>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 16,
+        }}
+      >
+        <Text strong style={{ fontSize: 16 }}>
+          文件体系
+        </Text>
+        <Space>
+          {isApprover && (
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => setCreateModalVisible(true)}
+            >
+              新建文件体系
+            </Button>
+          )}
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={fetchFileSystems}
+            loading={loading}
+          >
+            刷新
+          </Button>
+        </Space>
+      </div>
+
+      <Table
+        dataSource={fileSystems}
+        columns={columns}
+        rowKey="id"
+        loading={loading}
+        pagination={{
+          pageSize: 10,
+          showSizeChanger: true,
+          showTotal: (total) => `共 ${total} 条记录`,
+        }}
+        locale={{
+          emptyText: "暂无文件体系",
+        }}
+      />
+
       {/* 创建文件体系 Modal */}
       <Modal
         title="新建文件体系"
-        open={createFileSystemModalVisible}
+        open={createModalVisible}
         onCancel={() => {
-          setCreateFileSystemModalVisible(false);
-          fileSystemForm.resetFields();
+          setCreateModalVisible(false);
+          form.resetFields();
         }}
         footer={null}
         width={600}
       >
         <Form
-          form={fileSystemForm}
+          form={form}
           layout="vertical"
-          onFinish={handleCreateFileSystem}
+          onFinish={handleCreate}
           style={{ marginTop: 24 }}
         >
           <Form.Item
@@ -1619,8 +2558,8 @@ function KeshiManagement() {
               </Button>
               <Button
                 onClick={() => {
-                  setCreateFileSystemModalVisible(false);
-                  fileSystemForm.resetFields();
+                  setCreateModalVisible(false);
+                  form.resetFields();
                 }}
               >
                 取消
@@ -1629,285 +2568,6 @@ function KeshiManagement() {
           </Form.Item>
         </Form>
       </Modal>
-
-      {/* 上传文件 Modal */}
-      <Modal
-        title="上传文件"
-        open={uploadModalVisible}
-        onCancel={() => {
-          setUploadModalVisible(false);
-          uploadForm.resetFields();
-        }}
-        footer={null}
-        width={600}
-      >
-        <Form
-          form={uploadForm}
-          layout="vertical"
-          onFinish={handleUpload}
-          style={{ marginTop: 24 }}
-        >
-          <Form.Item
-            label="选择文件"
-            name="fileList"
-            valuePropName="fileList"
-            getValueFromEvent={(e) => {
-              if (Array.isArray(e)) {
-                return e;
-              }
-              return e?.fileList;
-            }}
-            rules={[
-              {
-                required: true,
-                message: "请选择要上传的文件",
-              },
-              {
-                validator: (_, value) => {
-                  if (!value || value.length === 0) {
-                    return Promise.reject(new Error("请至少选择一个文件"));
-                  }
-                  return Promise.resolve();
-                },
-              },
-            ]}
-          >
-            <Dragger
-              multiple
-              beforeUpload={() => false}
-              accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.jpg,.jpeg,.png,.zip,.rar"
-            >
-              <p className="ant-upload-drag-icon">
-                <InboxOutlined />
-              </p>
-              <p className="ant-upload-text">
-                点击或拖拽文件到此区域上传
-              </p>
-              <p className="ant-upload-hint">
-                支持多文件上传，支持 PDF、Word、Excel、图片、压缩包等格式
-              </p>
-            </Dragger>
-          </Form.Item>
-
-          <Form.Item>
-            <Space>
-              <Button
-                type="primary"
-                htmlType="submit"
-                loading={uploading}
-                icon={<UploadOutlined />}
-              >
-                上传
-              </Button>
-              <Button
-                onClick={() => {
-                  setUploadModalVisible(false);
-                  uploadForm.resetFields();
-                }}
-              >
-                取消
-              </Button>
-            </Space>
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      {/* 覆盖上传 Modal */}
-      <Modal
-        title={`覆盖上传 - ${selectedFile?.fileName || ""}`}
-        open={overwriteModalVisible}
-        onCancel={() => {
-          setOverwriteModalVisible(false);
-          overwriteForm.resetFields();
-          setSelectedFile(null);
-        }}
-        footer={null}
-        width={600}
-      >
-        <Form
-          form={overwriteForm}
-          layout="vertical"
-          onFinish={handleOverwrite}
-          style={{ marginTop: 24 }}
-        >
-          <Form.Item
-            label="选择新文件"
-            name="file"
-            rules={[
-              {
-                required: true,
-                message: "请选择要上传的文件",
-              },
-              {
-                validator: (_, value) => {
-                  if (!value || !Array.isArray(value) || value.length === 0) {
-                    return Promise.reject(new Error("请选择要上传的文件"));
-                  }
-                  return Promise.resolve();
-                },
-              },
-            ]}
-            valuePropName="fileList"
-            getValueFromEvent={(e) => {
-              if (Array.isArray(e)) {
-                return e;
-              }
-              return e?.fileList || [];
-            }}
-          >
-            <Upload
-              beforeUpload={() => false}
-              maxCount={1}
-              accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.jpg,.jpeg,.png,.zip,.rar"
-            >
-              <Button icon={<UploadOutlined />}>选择文件</Button>
-            </Upload>
-          </Form.Item>
-
-          <Form.Item
-            label="备注（可选）"
-            name="remark"
-            rules={[
-              {
-                max: 200,
-                message: "备注不能超过200个字符",
-              },
-            ]}
-          >
-            <Input.TextArea
-              rows={3}
-              placeholder="请输入备注信息（可选）"
-              showCount
-              maxLength={200}
-            />
-          </Form.Item>
-
-          <Form.Item>
-            <Space>
-              <Button
-                type="primary"
-                htmlType="submit"
-                loading={overwriting}
-                icon={<EditOutlined />}
-              >
-                覆盖上传
-              </Button>
-              <Button
-                onClick={() => {
-                  setOverwriteModalVisible(false);
-                  overwriteForm.resetFields();
-                  setSelectedFile(null);
-                }}
-              >
-                取消
-              </Button>
-            </Space>
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      {/* 历史记录 Modal */}
-      <Modal
-        title={`文件历史记录 - ${selectedFile?.fileName || ""}`}
-        open={historyModalVisible}
-        onCancel={() => {
-          setHistoryModalVisible(false);
-          setSelectedFile(null);
-          setFileHistory([]);
-        }}
-        footer={[
-          <Button
-            key="close"
-            onClick={() => {
-              setHistoryModalVisible(false);
-              setSelectedFile(null);
-              setFileHistory([]);
-            }}
-          >
-            关闭
-          </Button>,
-        ]}
-        width={800}
-      >
-        <Table
-          dataSource={fileHistory}
-          columns={[
-            {
-              title: "文件名",
-              dataIndex: "fileName",
-              key: "fileName",
-              ellipsis: true,
-              render: (text, record) => (
-                <Space>
-                  <FileOutlined />
-                  <span>{text}</span>
-                </Space>
-              ),
-            },
-            {
-              title: "文件",
-              key: "file",
-              width: 200,
-              render: (_, record) => (
-                <a
-                  href={record.currentPath}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 4,
-                    color: "#1890ff",
-                  }}
-                >
-                  <LinkOutlined />
-                  <span>查看/下载</span>
-                </a>
-              ),
-            },
-            {
-              title: "操作人",
-              dataIndex: "operatedBy",
-              key: "operatedBy",
-              width: 120,
-              render: (text) => text || "未知",
-            },
-            {
-              title: "备注",
-              dataIndex: "remark",
-              key: "remark",
-              ellipsis: true,
-              render: (text) => text || "-",
-            },
-            {
-              title: "操作时间",
-              key: "createdTime",
-              width: 180,
-              render: (_, record) => formatDate(record.createdTime),
-            },
-          ]}
-          rowKey="id"
-          loading={historyLoading}
-          pagination={{
-            pageSize: 10,
-            showSizeChanger: true,
-            showTotal: (total) => `共 ${total} 条历史记录`,
-          }}
-          locale={{
-            emptyText: "暂无历史记录",
-          }}
-        />
-      </Modal>
-
-      <style>{`
-        .row-inactive {
-          background-color: #fafafa;
-          color: #999;
-        }
-        .row-inactive a {
-          color: #999 !important;
-        }
-      `}</style>
     </div>
   );
 }
