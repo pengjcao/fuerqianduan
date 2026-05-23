@@ -14,12 +14,7 @@ const navItems = [
   {
     to: "/pi-records",
     label: "PI备案列表",
-    roles: ["admin", "pi", "secretary", "director", "chief"],
-  },
-  {
-    to: "/specialties",
-    label: "备案专业名称",
-    roles: ["admin", "pi", "secretary", "director", "chief", "viewer"],
+    roles: ["admin", "secretary", "director", "chief"],
   },
   {
     to: "/publish-notice",
@@ -32,15 +27,9 @@ const navItems = [
     roles: ["admin", "secretary", "director", "chief"],
   },
   {
-    label: "专业组资质",
+    label: "资质管理",
     roles: ["admin", "pi", "secretary", "director", "chief"],
     children: [
-      {
-        to: "/keshi",
-        label: "科室管理",
-        roles: ["admin", "pi", "secretary", "director", "chief"],
-        children: [],
-      },
       {
         label: "机构",
         children: [
@@ -55,6 +44,12 @@ const navItems = [
             roles: ["admin", "secretary", "director", "chief"],
           },
         ],
+      },
+      {
+        to: "/keshi",
+        label: "科室管理",
+        roles: ["admin", "pi", "secretary", "director", "chief"],
+        children: [],
       },
       // I期临床试验研究室暂时不显示
       // {

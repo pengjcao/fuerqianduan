@@ -53,7 +53,7 @@ function App() {
               path="/pi-records"
               element={
                 <RequireAuth
-                  roles={["admin", "pi", "secretary", "director", "chief"]}
+                  roles={["admin", "secretary", "director", "chief"]}
                 >
                   <PiRecords />
                 </RequireAuth>

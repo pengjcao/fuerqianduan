@@ -16,6 +16,7 @@ import {
 import { PlusOutlined, UploadOutlined, HistoryOutlined, DeleteOutlined } from "@ant-design/icons";
 import { institutionFileSystemApi } from "../api";
 import { AuthContext } from "../context/AuthContext";
+import { formatBackendDateTime } from "../utils/formatBackendDateTime";
 
 const { TextArea } = Input;
 const { Text } = Typography;
@@ -240,17 +241,6 @@ function InstitutionFiles() {
     });
   };
 
-  // 格式化时间
-  const formatTime = (timeStr) => {
-    if (!timeStr) return "-";
-    try {
-      const date = new Date(timeStr);
-      return date.toLocaleString("zh-CN");
-    } catch {
-      return timeStr;
-    }
-  };
-
   // 文件体系列表列定义
   const systemColumns = [
     {
@@ -288,7 +278,7 @@ function InstitutionFiles() {
       dataIndex: "createdTime",
       key: "createdTime",
       width: 180,
-      render: formatTime,
+      render: (value) => formatBackendDateTime(value),
     },
     {
       title: "操作",
@@ -363,14 +353,14 @@ function InstitutionFiles() {
       dataIndex: "createdTime",
       key: "createdTime",
       width: 180,
-      render: formatTime,
+      render: (value) => formatBackendDateTime(value),
     },
     {
       title: "更新时间",
       dataIndex: "updatedTime",
       key: "updatedTime",
       width: 180,
-      render: formatTime,
+      render: (value) => formatBackendDateTime(value),
     },
     {
       title: "操作",
@@ -627,7 +617,7 @@ function InstitutionFiles() {
               dataIndex: "uploadTime",
               key: "uploadTime",
               width: 180,
-              render: formatTime,
+              render: (value) => formatBackendDateTime(value),
             },
             {
               title: "上传人",
