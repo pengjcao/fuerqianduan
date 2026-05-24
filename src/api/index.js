@@ -150,6 +150,34 @@ export const siteFacilityApi = {
   // 受试者接待室详情（GET /user/siteFacility/receptionRoom/detail?keshi=xxx）
   getReceptionRoomDetail: (keshi) =>
     request.get("/user/siteFacility/receptionRoom/detail", { params: { keshi } }),
+
+  // 资料管理室填报（POST /user/siteFacility/managementRoom/report）
+  reportManagementRoom: (formData) =>
+    request.post("/user/siteFacility/managementRoom/report", formData),
+
+  // 资料管理室详情（GET /user/siteFacility/managementRoom/detail?keshi=xxx）
+  getManagementRoomDetail: (keshi) =>
+    request.get("/user/siteFacility/managementRoom/detail", { params: { keshi } }),
+
+  // 药品保管室填报（POST /user/siteFacility/drugStorageRoom/report）
+  reportDrugStorageRoom: (formData) =>
+    request.post("/user/siteFacility/drugStorageRoom/report", formData),
+
+  // 药品保管室详情（GET /user/siteFacility/drugStorageRoom/detail?keshi=xxx）
+  getDrugStorageRoomDetail: (keshi) =>
+    request.get("/user/siteFacility/drugStorageRoom/detail", {
+      params: keshi ? { keshi } : {},
+    }),
+
+  // 器械保管室填报（POST /user/siteFacility/equipmentStorageRoom/report）
+  reportEquipmentStorageRoom: (formData) =>
+    request.post("/user/siteFacility/equipmentStorageRoom/report", formData),
+
+  // 器械保管室详情（GET /user/siteFacility/equipmentStorageRoom/detail?keshi=xxx）
+  getEquipmentStorageRoomDetail: (keshi) =>
+    request.get("/user/siteFacility/equipmentStorageRoom/detail", {
+      params: keshi ? { keshi } : {},
+    }),
 };
 
 // 机构团队成员相关 API

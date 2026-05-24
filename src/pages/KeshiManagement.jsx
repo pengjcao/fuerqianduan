@@ -41,6 +41,7 @@ import {
   siteFacilityApi,
 } from "../api";
 import { AuthContext } from "../context/AuthContext";
+import { formatBackendDateTime } from "../utils/formatBackendDateTime";
 
 const { TextArea } = Input;
 
@@ -1292,12 +1293,108 @@ function BasicConditionTab({ keshi, groupPath, currentUser }) {
   );
 }
 
-/** 场地设施：当前含「受试者接待室」填报；后续同类接口可在此 Tab 内继续增加卡片区块 */
+function createStorageRoomColumns(involvesTitle, formatYesNo, renderPhotoCell) {
+  return [
+    {
+      title: involvesTitle,
+      dataIndex: "hasStorageRoom",
+      key: "hasStorageRoom",
+      width: 120,
+      align: "center",
+      render: formatYesNo,
+    },
+    {
+      title: "院区",
+      dataIndex: "campus",
+      key: "campus",
+      width: 140,
+      ellipsis: true,
+      render: (v) => (v != null ? String(v).trim() : "-"),
+    },
+    {
+      title: "地点",
+      dataIndex: "location",
+      key: "location",
+      ellipsis: { showTitle: true },
+      render: (v) => v || "-",
+    },
+    {
+      title: "照片",
+      dataIndex: "photo",
+      key: "photo",
+      width: 200,
+      render: renderPhotoCell,
+    },
+    {
+      title: "冰箱、温湿度计",
+      dataIndex: "hasFridge",
+      key: "hasFridge",
+      width: 120,
+      align: "center",
+      render: formatYesNo,
+    },
+    {
+      title: "人员出入记录",
+      dataIndex: "hasAccessRecord",
+      key: "hasAccessRecord",
+      width: 110,
+      align: "center",
+      render: formatYesNo,
+    },
+    {
+      title: "温湿度记录",
+      dataIndex: "hasTempHumidityRecord",
+      key: "hasTempHumidityRecord",
+      width: 100,
+      align: "center",
+      render: formatYesNo,
+    },
+    {
+      title: "冰箱台账",
+      dataIndex: "hasFridgeAccount",
+      key: "hasFridgeAccount",
+      width: 90,
+      align: "center",
+      render: formatYesNo,
+    },
+    {
+      title: "保养/校正/维修记录",
+      dataIndex: "hasMaintenanceRecord",
+      key: "hasMaintenanceRecord",
+      width: 140,
+      align: "center",
+      render: formatYesNo,
+    },
+    {
+      title: "填报时间",
+      dataIndex: "createTime",
+      key: "createTime",
+      width: 170,
+      render: (v) => formatBackendDateTime(v),
+    },
+  ];
+}
+
+/** 场地设施：受试者接待室、资料管理室等 */
 function SiteFacilityTab({ keshi, groupPath }) {
-  const [form] = Form.useForm();
-  const [submitting, setSubmitting] = useState(false);
-  const [detailList, setDetailList] = useState([]);
-  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [receptionForm] = Form.useForm();
+  const [managementForm] = Form.useForm();
+  const [drugStorageForm] = Form.useForm();
+  const [equipmentStorageForm] = Form.useForm();
+  const [receptionSubmitting, setReceptionSubmitting] = useState(false);
+  const [managementSubmitting, setManagementSubmitting] = useState(false);
+  const [drugStorageSubmitting, setDrugStorageSubmitting] = useState(false);
+  const [equipmentStorageSubmitting, setEquipmentStorageSubmitting] = useState(false);
+  const [receptionDetailList, setReceptionDetailList] = useState([]);
+  const [managementDetailList, setManagementDetailList] = useState([]);
+  const [drugStorageDetailList, setDrugStorageDetailList] = useState([]);
+  const [equipmentStorageDetailList, setEquipmentStorageDetailList] = useState([]);
+  const [loadingReceptionDetail, setLoadingReceptionDetail] = useState(false);
+  const [loadingManagementDetail, setLoadingManagementDetail] = useState(false);
+  const [loadingDrugStorageDetail, setLoadingDrugStorageDetail] = useState(false);
+  const [loadingEquipmentStorageDetail, setLoadingEquipmentStorageDetail] = useState(false);
+  const involvesDrugStorage = Form.useWatch("hasStorageRoom", drugStorageForm);
+  const involvesEquipmentStorage = Form.useWatch("hasStorageRoom", equipmentStorageForm);
 
   const campusOptions = useMemo(
     () => [
@@ -1309,42 +1406,139 @@ function SiteFacilityTab({ keshi, groupPath }) {
 
   const fetchReceptionRoomDetail = async () => {
     if (!keshi) {
-      setDetailList([]);
+      setReceptionDetailList([]);
       return;
     }
-    setLoadingDetail(true);
+    setLoadingReceptionDetail(true);
     try {
       const res = await siteFacilityApi.getReceptionRoomDetail(keshi);
       if (res?.success) {
-        setDetailList(res.data || []);
+        setReceptionDetailList(res.data || []);
       } else {
-        setDetailList([]);
+        setReceptionDetailList([]);
         message.error(res?.message || "获取受试者接待室详情失败");
       }
     } catch (e) {
       console.error("获取受试者接待室详情失败:", e);
-      setDetailList([]);
+      setReceptionDetailList([]);
       message.error(e?.message || "获取受试者接待室详情失败");
     } finally {
-      setLoadingDetail(false);
+      setLoadingReceptionDetail(false);
+    }
+  };
+
+  const fetchManagementRoomDetail = async () => {
+    if (!keshi) {
+      setManagementDetailList([]);
+      return;
+    }
+    setLoadingManagementDetail(true);
+    try {
+      const res = await siteFacilityApi.getManagementRoomDetail(keshi);
+      if (res?.success) {
+        setManagementDetailList(res.data || []);
+      } else {
+        setManagementDetailList([]);
+        message.error(res?.message || "获取资料管理室详情失败");
+      }
+    } catch (e) {
+      console.error("获取资料管理室详情失败:", e);
+      setManagementDetailList([]);
+      message.error(e?.message || "获取资料管理室详情失败");
+    } finally {
+      setLoadingManagementDetail(false);
+    }
+  };
+
+  const fetchDrugStorageRoomDetail = async () => {
+    if (!keshi) {
+      setDrugStorageDetailList([]);
+      return;
+    }
+    setLoadingDrugStorageDetail(true);
+    try {
+      const res = await siteFacilityApi.getDrugStorageRoomDetail(keshi);
+      if (res?.success) {
+        setDrugStorageDetailList(res.data || []);
+      } else {
+        setDrugStorageDetailList([]);
+        message.error(res?.message || "获取药品保管室详情失败");
+      }
+    } catch (e) {
+      console.error("获取药品保管室详情失败:", e);
+      setDrugStorageDetailList([]);
+      message.error(e?.message || "获取药品保管室详情失败");
+    } finally {
+      setLoadingDrugStorageDetail(false);
+    }
+  };
+
+  const fetchEquipmentStorageRoomDetail = async () => {
+    if (!keshi) {
+      setEquipmentStorageDetailList([]);
+      return;
+    }
+    setLoadingEquipmentStorageDetail(true);
+    try {
+      const res = await siteFacilityApi.getEquipmentStorageRoomDetail(keshi);
+      if (res?.success) {
+        setEquipmentStorageDetailList(res.data || []);
+      } else {
+        setEquipmentStorageDetailList([]);
+        message.error(res?.message || "获取器械保管室详情失败");
+      }
+    } catch (e) {
+      console.error("获取器械保管室详情失败:", e);
+      setEquipmentStorageDetailList([]);
+      message.error(e?.message || "获取器械保管室详情失败");
+    } finally {
+      setLoadingEquipmentStorageDetail(false);
     }
   };
 
   useEffect(() => {
-    form.resetFields();
+    receptionForm.resetFields();
+    managementForm.resetFields();
+    drugStorageForm.resetFields();
+    equipmentStorageForm.resetFields();
     fetchReceptionRoomDetail();
+    fetchManagementRoomDetail();
+    fetchDrugStorageRoomDetail();
+    fetchEquipmentStorageRoomDetail();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [keshi, groupPath]);
 
-  const formatCanMeetNeed = (v) => {
+  const formatYesNo = (v) => {
     if (v === "1" || v === 1) return "是";
     if (v === "0" || v === 0) return "否";
     return v === undefined || v === null || v === "" ? "-" : String(v);
   };
 
+  const formatCanMeetNeed = formatYesNo;
+
   const isLikelyImageUrl = (url) => {
     if (!url || typeof url !== "string") return false;
     return /\.(jpe?g|png|gif|webp|bmp|svg)$/i.test(url.split("?")[0]);
+  };
+
+  const renderPhotoCell = (url) => {
+    if (!url) return "-";
+    return (
+      <Space direction="vertical" size={4}>
+        {isLikelyImageUrl(url) ? (
+          <a href={url} target="_blank" rel="noopener noreferrer">
+            <img
+              alt=""
+              src={url}
+              style={{ maxWidth: 120, maxHeight: 72, objectFit: "cover", display: "block" }}
+            />
+          </a>
+        ) : null}
+        <a href={url} target="_blank" rel="noopener noreferrer">
+          查看/下载
+        </a>
+      </Space>
+    );
   };
 
   const receptionRoomColumns = [
@@ -1368,25 +1562,7 @@ function SiteFacilityTab({ keshi, groupPath }) {
       dataIndex: "photo",
       key: "photo",
       width: 200,
-      render: (url) => {
-        if (!url) return "-";
-        return (
-          <Space direction="vertical" size={4}>
-            {isLikelyImageUrl(url) ? (
-              <a href={url} target="_blank" rel="noopener noreferrer">
-                <img
-                  alt=""
-                  src={url}
-                  style={{ maxWidth: 120, maxHeight: 72, objectFit: "cover", display: "block" }}
-                />
-              </a>
-            ) : null}
-            <a href={url} target="_blank" rel="noopener noreferrer">
-              查看/下载
-            </a>
-          </Space>
-        );
-      },
+      render: renderPhotoCell,
     },
     {
       title: "是否能够满足知情同意及随访等需要",
@@ -1398,7 +1574,71 @@ function SiteFacilityTab({ keshi, groupPath }) {
     },
   ];
 
-  const onFinish = async (values) => {
+  const managementRoomColumns = [
+    {
+      title: "院区",
+      dataIndex: "campus",
+      key: "campus",
+      width: 140,
+      ellipsis: true,
+      render: (v) => (v != null ? String(v).trim() : "-"),
+    },
+    {
+      title: "地点",
+      dataIndex: "location",
+      key: "location",
+      ellipsis: { showTitle: true },
+      render: (v) => v || "-",
+    },
+    {
+      title: "照片",
+      dataIndex: "photo",
+      key: "photo",
+      width: 200,
+      render: renderPhotoCell,
+    },
+    {
+      title: "温湿度记录",
+      dataIndex: "hasTempHumidityRecord",
+      key: "hasTempHumidityRecord",
+      width: 100,
+      align: "center",
+      render: formatYesNo,
+    },
+    {
+      title: "人员出入记录",
+      dataIndex: "hasAccessRecord",
+      key: "hasAccessRecord",
+      width: 110,
+      align: "center",
+      render: formatYesNo,
+    },
+    {
+      title: "文件借阅记录",
+      dataIndex: "hasFileBorrowRecord",
+      key: "hasFileBorrowRecord",
+      width: 110,
+      align: "center",
+      render: formatYesNo,
+    },
+    {
+      title: "防火/防虫/防盗/防潮",
+      dataIndex: "hasProtectionCondition",
+      key: "hasProtectionCondition",
+      width: 140,
+      align: "center",
+      render: formatYesNo,
+    },
+    {
+      title: "填报时间",
+      dataIndex: "createTime",
+      key: "createTime",
+      width: 170,
+      render: (v) => formatBackendDateTime(v),
+    },
+  ];
+
+  const onReceptionFinish = async (values) => {
     if (!keshi) {
       message.error("未获取到科室信息，无法提交");
       return;
@@ -1418,7 +1658,7 @@ function SiteFacilityTab({ keshi, groupPath }) {
       return;
     }
     const campusStr = campuses.join(",");
-    setSubmitting(true);
+    setReceptionSubmitting(true);
     try {
       const formData = new FormData();
       formData.append("keshi", keshi);
@@ -1430,7 +1670,7 @@ function SiteFacilityTab({ keshi, groupPath }) {
       const res = await siteFacilityApi.reportReceptionRoom(formData);
       if (res?.success) {
         message.success("受试者接待室填报成功");
-        form.resetFields();
+        receptionForm.resetFields();
         fetchReceptionRoomDetail();
       } else {
         message.error(res?.message || "提交失败");
@@ -1439,7 +1679,187 @@ function SiteFacilityTab({ keshi, groupPath }) {
       console.error("受试者接待室填报失败:", e);
       message.error(e?.message || "提交失败，请重试");
     } finally {
-      setSubmitting(false);
+      setReceptionSubmitting(false);
+    }
+  };
+
+  const onManagementFinish = async (values) => {
+    if (!keshi) {
+      message.error("未获取到科室信息，无法提交");
+      return;
+    }
+    const fileList = values.photo;
+    const fileItem = fileList?.[0];
+    const file = fileItem?.originFileObj ?? fileItem;
+    if (!(file instanceof File)) {
+      message.error("请上传照片");
+      return;
+    }
+    const campuses = Array.isArray(values.campus)
+      ? values.campus.filter(Boolean)
+      : [];
+    if (campuses.length === 0) {
+      message.error("请至少选择一个院区");
+      return;
+    }
+    const campusStr = campuses.join(",");
+    setManagementSubmitting(true);
+    try {
+      const formData = new FormData();
+      formData.append("keshi", keshi);
+      formData.append("campus", campusStr);
+      formData.append("location", (values.location || "").trim());
+      formData.append("photo", file);
+      formData.append("hasTempHumidityRecord", String(values.hasTempHumidityRecord));
+      formData.append("hasAccessRecord", String(values.hasAccessRecord));
+      formData.append("hasFileBorrowRecord", String(values.hasFileBorrowRecord));
+      formData.append("hasProtectionCondition", String(values.hasProtectionCondition));
+
+      const res = await siteFacilityApi.reportManagementRoom(formData);
+      if (res?.success) {
+        message.success("资料管理室填报成功");
+        managementForm.resetFields();
+        fetchManagementRoomDetail();
+      } else {
+        message.error(res?.message || "提交失败");
+      }
+    } catch (e) {
+      console.error("资料管理室填报失败:", e);
+      message.error(e?.message || "提交失败，请重试");
+    } finally {
+      setManagementSubmitting(false);
+    }
+  };
+
+  const drugStorageRoomColumns = createStorageRoomColumns(
+    "涉及药品保管室",
+    formatYesNo,
+    renderPhotoCell
+  );
+  const equipmentStorageRoomColumns = createStorageRoomColumns(
+    "涉及器械保管室",
+    formatYesNo,
+    renderPhotoCell
+  );
+
+  const clearStorageRoomDetailFields = (form) => {
+    form.setFieldsValue({
+      campus: undefined,
+      location: undefined,
+      photo: undefined,
+      hasFridge: undefined,
+      hasAccessRecord: undefined,
+      hasTempHumidityRecord: undefined,
+      hasFridgeAccount: undefined,
+      hasMaintenanceRecord: undefined,
+    });
+  };
+
+  const clearDrugStorageDetailFields = () => clearStorageRoomDetailFields(drugStorageForm);
+  const clearEquipmentStorageDetailFields = () =>
+    clearStorageRoomDetailFields(equipmentStorageForm);
+
+  const appendStorageRoomDetailToFormData = (formData, values) => {
+    const fileList = values.photo;
+    const fileItem = fileList?.[0];
+    const file = fileItem?.originFileObj ?? fileItem;
+    if (!(file instanceof File)) {
+      return { ok: false, message: "请上传照片" };
+    }
+    const campuses = Array.isArray(values.campus) ? values.campus.filter(Boolean) : [];
+    if (campuses.length === 0) {
+      return { ok: false, message: "请至少选择一个院区" };
+    }
+    formData.append("campus", campuses.join(","));
+    formData.append("location", (values.location || "").trim());
+    formData.append("photo", file);
+    formData.append("hasFridge", String(values.hasFridge));
+    formData.append("hasAccessRecord", String(values.hasAccessRecord));
+    formData.append("hasTempHumidityRecord", String(values.hasTempHumidityRecord));
+    formData.append("hasFridgeAccount", String(values.hasFridgeAccount));
+    formData.append("hasMaintenanceRecord", String(values.hasMaintenanceRecord));
+    return { ok: true };
+  };
+
+  const onDrugStorageFinish = async (values) => {
+    if (!keshi) {
+      message.error("未获取到科室信息，无法提交");
+      return;
+    }
+    if (values.hasStorageRoom !== 0 && values.hasStorageRoom !== 1) {
+      message.error("请选择是否涉及药品保管室");
+      return;
+    }
+
+    setDrugStorageSubmitting(true);
+    try {
+      const formData = new FormData();
+      formData.append("keshi", keshi);
+      formData.append("hasStorageRoom", String(values.hasStorageRoom));
+
+      if (values.hasStorageRoom === 1) {
+        const appendResult = appendStorageRoomDetailToFormData(formData, values);
+        if (!appendResult.ok) {
+          message.error(appendResult.message);
+          setDrugStorageSubmitting(false);
+          return;
+        }
+      }
+
+      const res = await siteFacilityApi.reportDrugStorageRoom(formData);
+      if (res?.success) {
+        message.success("药品保管室填报成功");
+        drugStorageForm.resetFields();
+        fetchDrugStorageRoomDetail();
+      } else {
+        message.error(res?.message || "提交失败");
+      }
+    } catch (e) {
+      console.error("药品保管室填报失败:", e);
+      message.error(e?.message || "提交失败，请重试");
+    } finally {
+      setDrugStorageSubmitting(false);
+    }
+  };
+
+  const onEquipmentStorageFinish = async (values) => {
+    if (!keshi) {
+      message.error("未获取到科室信息，无法提交");
+      return;
+    }
+    if (values.hasStorageRoom !== 0 && values.hasStorageRoom !== 1) {
+      message.error("请选择是否涉及器械保管室");
+      return;
+    }
+
+    setEquipmentStorageSubmitting(true);
+    try {
+      const formData = new FormData();
+      formData.append("keshi", keshi);
+      formData.append("hasStorageRoom", String(values.hasStorageRoom));
+
+      if (values.hasStorageRoom === 1) {
+        const appendResult = appendStorageRoomDetailToFormData(formData, values);
+        if (!appendResult.ok) {
+          message.error(appendResult.message);
+          setEquipmentStorageSubmitting(false);
+          return;
+        }
+      }
+
+      const res = await siteFacilityApi.reportEquipmentStorageRoom(formData);
+      if (res?.success) {
+        message.success("器械保管室填报成功");
+        equipmentStorageForm.resetFields();
+        fetchEquipmentStorageRoomDetail();
+      } else {
+        message.error(res?.message || "提交失败");
+      }
+    } catch (e) {
+      console.error("器械保管室填报失败:", e);
+      message.error(e?.message || "提交失败，请重试");
+    } finally {
+      setEquipmentStorageSubmitting(false);
     }
   };
 
@@ -1465,19 +1885,19 @@ function SiteFacilityTab({ keshi, groupPath }) {
         extra={
           <Space>
             <Text type="secondary" style={{ fontSize: 12 }}>
-              共 {detailList.length} 条
+              共 {receptionDetailList.length} 条
             </Text>
-            <Button onClick={fetchReceptionRoomDetail} loading={loadingDetail}>
+            <Button onClick={fetchReceptionRoomDetail} loading={loadingReceptionDetail}>
               刷新
             </Button>
           </Space>
         }
       >
-        <Spin spinning={loadingDetail}>
+        <Spin spinning={loadingReceptionDetail}>
           <Table
             size="small"
             rowKey={(_, index) => `rr-${index}`}
-            dataSource={detailList}
+            dataSource={receptionDetailList}
             columns={receptionRoomColumns}
             pagination={{
               pageSize: 10,
@@ -1493,7 +1913,7 @@ function SiteFacilityTab({ keshi, groupPath }) {
       </Card>
 
       <Card size="small" title="受试者接待室（填报）">
-        <Form form={form} layout="vertical" onFinish={onFinish}>
+        <Form form={receptionForm} layout="vertical" onFinish={onReceptionFinish}>
           <Form.Item
             label="院区"
             name="campus"
@@ -1561,18 +1981,538 @@ function SiteFacilityTab({ keshi, groupPath }) {
 
           <Form.Item>
             <Space>
-              <Button type="primary" htmlType="submit" loading={submitting}>
+              <Button type="primary" htmlType="submit" loading={receptionSubmitting}>
                 提交
               </Button>
-              <Button onClick={() => form.resetFields()}>重置</Button>
+              <Button onClick={() => receptionForm.resetFields()}>重置</Button>
             </Space>
           </Form.Item>
         </Form>
       </Card>
 
-      <p className="small muted" style={{ marginTop: 16, marginBottom: 0 }}>
-        其他场地设施子模块可在后续接口就绪后，在本 Tab 内继续增加表单区块。
-      </p>
+      <Divider />
+
+      <Card
+        size="small"
+        style={{ marginBottom: 16, background: "#fafafa" }}
+        title="资料管理室（已填报记录）"
+        extra={
+          <Space>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              共 {managementDetailList.length} 条
+            </Text>
+            <Button onClick={fetchManagementRoomDetail} loading={loadingManagementDetail}>
+              刷新
+            </Button>
+          </Space>
+        }
+      >
+        <Spin spinning={loadingManagementDetail}>
+          <Table
+            size="small"
+            rowKey={(record) => record.id ?? `mr-${record.campus}-${record.location}`}
+            dataSource={managementDetailList}
+            columns={managementRoomColumns}
+            pagination={{
+              pageSize: 10,
+              showSizeChanger: true,
+              showTotal: (t) => `共 ${t} 条`,
+            }}
+            scroll={{ x: 1200 }}
+            locale={{
+              emptyText: "暂无记录，请在下方填报提交",
+            }}
+          />
+        </Spin>
+      </Card>
+
+      <Card size="small" title="资料管理室（填报）">
+        <Form form={managementForm} layout="vertical" onFinish={onManagementFinish}>
+          <Form.Item
+            label="院区"
+            name="campus"
+            rules={[{ required: true, message: "请选择院区" }]}
+            extra="可多选，提交时合并为「江南」或「江南,渝中」等形式传给后端"
+          >
+            <Select
+              mode="multiple"
+              allowClear
+              placeholder="请选择院区（可多选）"
+              options={campusOptions}
+            />
+          </Form.Item>
+
+          <Form.Item
+            label="地点"
+            name="location"
+            rules={[{ required: true, message: "请输入地点" }]}
+          >
+            <Input placeholder="请输入地点" />
+          </Form.Item>
+
+          <Form.Item
+            label="照片"
+            name="photo"
+            valuePropName="fileList"
+            getValueFromEvent={(e) => {
+              if (Array.isArray(e)) return e;
+              return e?.fileList ?? [];
+            }}
+            rules={[
+              {
+                validator: (_, fileList) => {
+                  if (!fileList || fileList.length === 0) {
+                    return Promise.reject(new Error("请上传照片"));
+                  }
+                  return Promise.resolve();
+                },
+              },
+            ]}
+          >
+            <Upload
+              beforeUpload={() => false}
+              maxCount={1}
+              listType="picture-card"
+              accept="image/*"
+            >
+              <div>
+                <UploadOutlined />
+                <div style={{ marginTop: 8 }}>上传</div>
+              </div>
+            </Upload>
+          </Form.Item>
+
+          <Form.Item
+            label="是否有温湿度记录"
+            name="hasTempHumidityRecord"
+            rules={[{ required: true, message: "请选择是或否" }]}
+          >
+            <Radio.Group>
+              <Radio value={1}>是</Radio>
+              <Radio value={0}>否</Radio>
+            </Radio.Group>
+          </Form.Item>
+
+          <Form.Item
+            label="是否有人员出入记录"
+            name="hasAccessRecord"
+            rules={[{ required: true, message: "请选择是或否" }]}
+          >
+            <Radio.Group>
+              <Radio value={1}>是</Radio>
+              <Radio value={0}>否</Radio>
+            </Radio.Group>
+          </Form.Item>
+
+          <Form.Item
+            label="是否有文件借阅记录"
+            name="hasFileBorrowRecord"
+            rules={[{ required: true, message: "请选择是或否" }]}
+          >
+            <Radio.Group>
+              <Radio value={1}>是</Radio>
+              <Radio value={0}>否</Radio>
+            </Radio.Group>
+          </Form.Item>
+
+          <Form.Item
+            label="是否具备防火/防虫/防盗/防潮条件"
+            name="hasProtectionCondition"
+            rules={[{ required: true, message: "请选择是或否" }]}
+          >
+            <Radio.Group>
+              <Radio value={1}>是</Radio>
+              <Radio value={0}>否</Radio>
+            </Radio.Group>
+          </Form.Item>
+
+          <Form.Item>
+            <Space>
+              <Button type="primary" htmlType="submit" loading={managementSubmitting}>
+                提交
+              </Button>
+              <Button onClick={() => managementForm.resetFields()}>重置</Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Card>
+
+      <Divider />
+
+      <Card
+        size="small"
+        style={{ marginBottom: 16, background: "#fafafa" }}
+        title="药品保管室（已填报记录）"
+        extra={
+          <Space>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              共 {drugStorageDetailList.length} 条
+            </Text>
+            <Button onClick={fetchDrugStorageRoomDetail} loading={loadingDrugStorageDetail}>
+              刷新
+            </Button>
+          </Space>
+        }
+      >
+        <Spin spinning={loadingDrugStorageDetail}>
+          <Table
+            size="small"
+            rowKey={(record) => record.id ?? `ds-${record.campus}-${record.location}`}
+            dataSource={drugStorageDetailList}
+            columns={drugStorageRoomColumns}
+            pagination={{
+              pageSize: 10,
+              showSizeChanger: true,
+              showTotal: (t) => `共 ${t} 条`,
+            }}
+            scroll={{ x: 1400 }}
+            locale={{
+              emptyText: "暂无记录，请在下方填报提交",
+            }}
+          />
+        </Spin>
+      </Card>
+
+      <Card size="small" title="药品保管室（填报）">
+        <Form form={drugStorageForm} layout="vertical" onFinish={onDrugStorageFinish}>
+          <Form.Item
+            label="是否涉及药品保管室"
+            name="hasStorageRoom"
+            rules={[{ required: true, message: "请选择是否涉及药品保管室" }]}
+            extra="若选择「否」，下方院区、地点等字段无需填写"
+          >
+            <Radio.Group
+              onChange={(e) => {
+                if (e.target.value === 0) {
+                  clearDrugStorageDetailFields();
+                }
+              }}
+            >
+              <Radio value={1}>是</Radio>
+              <Radio value={0}>否</Radio>
+            </Radio.Group>
+          </Form.Item>
+
+          {involvesDrugStorage === 1 && (
+            <>
+              <Form.Item
+                label="院区"
+                name="campus"
+                rules={[{ required: true, message: "请选择院区" }]}
+                extra="可多选，提交时合并为「江南」或「江南,渝中」等形式传给后端"
+              >
+                <Select
+                  mode="multiple"
+                  allowClear
+                  placeholder="请选择院区（可多选）"
+                  options={campusOptions}
+                />
+              </Form.Item>
+
+              <Form.Item
+                label="地点"
+                name="location"
+                rules={[{ required: true, message: "请输入地点" }]}
+              >
+                <Input placeholder="请输入地点" />
+              </Form.Item>
+
+              <Form.Item
+                label="照片"
+                name="photo"
+                valuePropName="fileList"
+                getValueFromEvent={(e) => {
+                  if (Array.isArray(e)) return e;
+                  return e?.fileList ?? [];
+                }}
+                rules={[
+                  {
+                    validator: (_, fileList) => {
+                      if (!fileList || fileList.length === 0) {
+                        return Promise.reject(new Error("请上传照片"));
+                      }
+                      return Promise.resolve();
+                    },
+                  },
+                ]}
+              >
+                <Upload
+                  beforeUpload={() => false}
+                  maxCount={1}
+                  listType="picture-card"
+                  accept="image/*"
+                >
+                  <div>
+                    <UploadOutlined />
+                    <div style={{ marginTop: 8 }}>上传</div>
+                  </div>
+                </Upload>
+              </Form.Item>
+
+              <Form.Item
+                label="是否具有冰箱、温湿度计"
+                name="hasFridge"
+                rules={[{ required: true, message: "请选择是或否" }]}
+              >
+                <Radio.Group>
+                  <Radio value={1}>是</Radio>
+                  <Radio value={0}>否</Radio>
+                </Radio.Group>
+              </Form.Item>
+
+              <Form.Item
+                label="是否有人员出入记录"
+                name="hasAccessRecord"
+                rules={[{ required: true, message: "请选择是或否" }]}
+              >
+                <Radio.Group>
+                  <Radio value={1}>是</Radio>
+                  <Radio value={0}>否</Radio>
+                </Radio.Group>
+              </Form.Item>
+
+              <Form.Item
+                label="是否有温湿度记录"
+                name="hasTempHumidityRecord"
+                rules={[{ required: true, message: "请选择是或否" }]}
+              >
+                <Radio.Group>
+                  <Radio value={1}>是</Radio>
+                  <Radio value={0}>否</Radio>
+                </Radio.Group>
+              </Form.Item>
+
+              <Form.Item
+                label="是否有冰箱台账"
+                name="hasFridgeAccount"
+                rules={[{ required: true, message: "请选择是或否" }]}
+              >
+                <Radio.Group>
+                  <Radio value={1}>是</Radio>
+                  <Radio value={0}>否</Radio>
+                </Radio.Group>
+              </Form.Item>
+
+              <Form.Item
+                label="是否具有冰箱等仪器设备保养、校正、维修记录"
+                name="hasMaintenanceRecord"
+                rules={[{ required: true, message: "请选择是或否" }]}
+              >
+                <Radio.Group>
+                  <Radio value={1}>是</Radio>
+                  <Radio value={0}>否</Radio>
+                </Radio.Group>
+              </Form.Item>
+            </>
+          )}
+
+          <Form.Item>
+            <Space>
+              <Button type="primary" htmlType="submit" loading={drugStorageSubmitting}>
+                提交
+              </Button>
+              <Button
+                onClick={() => {
+                  drugStorageForm.resetFields();
+                }}
+              >
+                重置
+              </Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Card>
+
+      <Divider />
+
+      <Card
+        size="small"
+        style={{ marginBottom: 16, background: "#fafafa" }}
+        title="器械保管室（已填报记录）"
+        extra={
+          <Space>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              共 {equipmentStorageDetailList.length} 条
+            </Text>
+            <Button
+              onClick={fetchEquipmentStorageRoomDetail}
+              loading={loadingEquipmentStorageDetail}
+            >
+              刷新
+            </Button>
+          </Space>
+        }
+      >
+        <Spin spinning={loadingEquipmentStorageDetail}>
+          <Table
+            size="small"
+            rowKey={(record) => record.id ?? `es-${record.campus}-${record.location}`}
+            dataSource={equipmentStorageDetailList}
+            columns={equipmentStorageRoomColumns}
+            pagination={{
+              pageSize: 10,
+              showSizeChanger: true,
+              showTotal: (t) => `共 ${t} 条`,
+            }}
+            scroll={{ x: 1400 }}
+            locale={{
+              emptyText: "暂无记录，请在下方填报提交",
+            }}
+          />
+        </Spin>
+      </Card>
+
+      <Card size="small" title="器械保管室（填报）">
+        <Form
+          form={equipmentStorageForm}
+          layout="vertical"
+          onFinish={onEquipmentStorageFinish}
+        >
+          <Form.Item
+            label="是否涉及器械保管室"
+            name="hasStorageRoom"
+            rules={[{ required: true, message: "请选择是否涉及器械保管室" }]}
+            extra="若选择「否」，下方院区、地点等字段无需填写"
+          >
+            <Radio.Group
+              onChange={(e) => {
+                if (e.target.value === 0) {
+                  clearEquipmentStorageDetailFields();
+                }
+              }}
+            >
+              <Radio value={1}>是</Radio>
+              <Radio value={0}>否</Radio>
+            </Radio.Group>
+          </Form.Item>
+
+          {involvesEquipmentStorage === 1 && (
+            <>
+              <Form.Item
+                label="院区"
+                name="campus"
+                rules={[{ required: true, message: "请选择院区" }]}
+                extra="可多选，提交时合并为「江南」或「江南,渝中」等形式传给后端"
+              >
+                <Select
+                  mode="multiple"
+                  allowClear
+                  placeholder="请选择院区（可多选）"
+                  options={campusOptions}
+                />
+              </Form.Item>
+
+              <Form.Item
+                label="地点"
+                name="location"
+                rules={[{ required: true, message: "请输入地点" }]}
+              >
+                <Input placeholder="请输入地点" />
+              </Form.Item>
+
+              <Form.Item
+                label="照片"
+                name="photo"
+                valuePropName="fileList"
+                getValueFromEvent={(e) => {
+                  if (Array.isArray(e)) return e;
+                  return e?.fileList ?? [];
+                }}
+                rules={[
+                  {
+                    validator: (_, fileList) => {
+                      if (!fileList || fileList.length === 0) {
+                        return Promise.reject(new Error("请上传照片"));
+                      }
+                      return Promise.resolve();
+                    },
+                  },
+                ]}
+              >
+                <Upload
+                  beforeUpload={() => false}
+                  maxCount={1}
+                  listType="picture-card"
+                  accept="image/*"
+                >
+                  <div>
+                    <UploadOutlined />
+                    <div style={{ marginTop: 8 }}>上传</div>
+                  </div>
+                </Upload>
+              </Form.Item>
+
+              <Form.Item
+                label="是否具有冰箱、温湿度计"
+                name="hasFridge"
+                rules={[{ required: true, message: "请选择是或否" }]}
+              >
+                <Radio.Group>
+                  <Radio value={1}>是</Radio>
+                  <Radio value={0}>否</Radio>
+                </Radio.Group>
+              </Form.Item>
+
+              <Form.Item
+                label="是否有人员出入记录"
+                name="hasAccessRecord"
+                rules={[{ required: true, message: "请选择是或否" }]}
+              >
+                <Radio.Group>
+                  <Radio value={1}>是</Radio>
+                  <Radio value={0}>否</Radio>
+                </Radio.Group>
+              </Form.Item>
+
+              <Form.Item
+                label="是否有温湿度记录"
+                name="hasTempHumidityRecord"
+                rules={[{ required: true, message: "请选择是或否" }]}
+              >
+                <Radio.Group>
+                  <Radio value={1}>是</Radio>
+                  <Radio value={0}>否</Radio>
+                </Radio.Group>
+              </Form.Item>
+
+              <Form.Item
+                label="是否有冰箱台账"
+                name="hasFridgeAccount"
+                rules={[{ required: true, message: "请选择是或否" }]}
+              >
+                <Radio.Group>
+                  <Radio value={1}>是</Radio>
+                  <Radio value={0}>否</Radio>
+                </Radio.Group>
+              </Form.Item>
+
+              <Form.Item
+                label="是否具有冰箱等仪器设备保养、校正、维修记录"
+                name="hasMaintenanceRecord"
+                rules={[{ required: true, message: "请选择是或否" }]}
+              >
+                <Radio.Group>
+                  <Radio value={1}>是</Radio>
+                  <Radio value={0}>否</Radio>
+                </Radio.Group>
+              </Form.Item>
+            </>
+          )}
+
+          <Form.Item>
+            <Space>
+              <Button
+                type="primary"
+                htmlType="submit"
+                loading={equipmentStorageSubmitting}
+              >
+                提交
+              </Button>
+              <Button onClick={() => equipmentStorageForm.resetFields()}>重置</Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Card>
     </div>
   );
 }
