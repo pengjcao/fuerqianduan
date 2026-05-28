@@ -178,6 +178,26 @@ export const siteFacilityApi = {
     request.get("/user/siteFacility/equipmentStorageRoom/detail", {
       params: keshi ? { keshi } : {},
     }),
+
+  // 样本处理及储存区填报（POST /user/siteFacility/sampleStorageRoom/report）
+  reportSampleStorageRoom: (formData) =>
+    request.post("/user/siteFacility/sampleStorageRoom/report", formData),
+
+  // 样本处理及储存区详情（GET /user/siteFacility/sampleStorageRoom/detail?keshi=xxx）
+  getSampleStorageRoomDetail: (keshi) =>
+    request.get("/user/siteFacility/sampleStorageRoom/detail", {
+      params: keshi ? { keshi } : {},
+    }),
+
+  // 抢救设施设备填报（POST /user/siteFacility/emergencyEquipment/report）
+  reportEmergencyEquipment: (formData) =>
+    request.post("/user/siteFacility/emergencyEquipment/report", formData),
+
+  // 抢救设施设备详情（GET /user/siteFacility/emergencyEquipment/detail?keshi=xxx）
+  getEmergencyEquipmentDetail: (keshi) =>
+    request.get("/user/siteFacility/emergencyEquipment/detail", {
+      params: keshi ? { keshi } : {},
+    }),
 };
 
 // 机构团队成员相关 API
