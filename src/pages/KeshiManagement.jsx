@@ -906,6 +906,58 @@ function BasicConditionTab({ keshi, groupPath, currentUser }) {
     []
   );
 
+  const normUploadFileList = (e) => {
+    if (Array.isArray(e)) {
+      return e;
+    }
+    return e?.fileList || [];
+  };
+
+  const appendIfPresent = (formData, key, value) => {
+    if (value === undefined || value === null || value === "") {
+      return;
+    }
+    formData.append(key, value);
+  };
+
+  const appendUploadFile = (formData, key, fileList) => {
+    const uploadFile = Array.isArray(fileList) ? fileList[0] : null;
+    const rawFile = uploadFile?.originFileObj || uploadFile;
+    if (rawFile && typeof Blob !== "undefined" && rawFile instanceof Blob) {
+      formData.append(key, rawFile);
+    }
+  };
+
+  const isLikelyImageUrl = (url) => {
+    if (!url || typeof url !== "string") return false;
+    return /\.(jpe?g|png|gif|webp|bmp|svg)$/i.test(url.split("?")[0]);
+  };
+
+  const renderFileCell = (url, label) => {
+    if (!url) return "-";
+    return (
+      <Space direction="vertical" size={4}>
+        {isLikelyImageUrl(url) ? (
+          <a href={url} target="_blank" rel="noopener noreferrer">
+            <img
+              alt=""
+              src={url}
+              style={{
+                maxWidth: 120,
+                maxHeight: 72,
+                objectFit: "cover",
+                display: "block",
+              }}
+            />
+          </a>
+        ) : null}
+        <a href={url} target="_blank" rel="noopener noreferrer">
+          <FileOutlined /> {label}
+        </a>
+      </Space>
+    );
+  };
+
   const fetchDetail = async () => {
     if (!keshi) {
       setDetailList([]);
@@ -939,6 +991,8 @@ function BasicConditionTab({ keshi, groupPath, currentUser }) {
       inpatientCount: undefined,
       avgDailyOutpatientCount: undefined,
       diseaseSource: "",
+      departmentPhoto: [],
+      departmentIntroduction: [],
     });
     fetchDetail();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -955,19 +1009,32 @@ function BasicConditionTab({ keshi, groupPath, currentUser }) {
         ? values.campusList.filter(Boolean).join(",")
         : "";
 
-      const payload = {
-        keshi,
-        createBy: currentUser?.id || currentUser?.username || "",
-        campusList: campusListStr || undefined,
-        bedCount: values.bedCount ?? undefined,
-        inpatientCount: values.inpatientCount ?? undefined,
-        avgDailyOutpatientCount: values.avgDailyOutpatientCount ?? undefined,
-        diseaseSource: values.diseaseSource?.trim() || undefined,
-      };
+      const formData = new FormData();
+      appendIfPresent(formData, "keshi", keshi);
+      appendIfPresent(formData, "createBy", currentUser?.id || currentUser?.username || "");
+      appendIfPresent(formData, "campusList", campusListStr);
+      appendIfPresent(formData, "bedCount", values.bedCount);
+      appendIfPresent(formData, "inpatientCount", values.inpatientCount);
+      appendIfPresent(
+        formData,
+        "avgDailyOutpatientCount",
+        values.avgDailyOutpatientCount
+      );
+      appendIfPresent(formData, "diseaseSource", values.diseaseSource?.trim());
+      appendUploadFile(formData, "departmentPhoto", values.departmentPhoto);
+      appendUploadFile(
+        formData,
+        "departmentIntroduction",
+        values.departmentIntroduction
+      );
 
-      const res = await basicConditionApi.report(payload);
+      const res = await basicConditionApi.report(formData);
       if (res?.success) {
         message.success("基础条件填报成功");
+        form.setFieldsValue({
+          departmentPhoto: [],
+          departmentIntroduction: [],
+        });
         fetchDetail();
       } else {
         message.error(res?.message || "基础条件填报失败");
@@ -1003,6 +1070,8 @@ function BasicConditionTab({ keshi, groupPath, currentUser }) {
       inpatientCount: record.inpatientCount ?? undefined,
       avgDailyOutpatientCount: record.avgDailyOutpatientCount ?? undefined,
       diseaseSource: record.diseaseSource || "",
+      departmentPhoto: [],
+      departmentIntroduction: [],
     });
     message.success("已回填到表单，可直接修改后再次提交");
   };
@@ -1078,6 +1147,20 @@ function BasicConditionTab({ keshi, groupPath, currentUser }) {
       render: (v) => v || "-",
     },
     {
+      title: "科室合照",
+      dataIndex: "departmentPhotoPath",
+      key: "departmentPhotoPath",
+      width: 180,
+      render: (url) => renderFileCell(url, "查看合照"),
+    },
+    {
+      title: "科室介绍",
+      dataIndex: "departmentIntroductionPath",
+      key: "departmentIntroductionPath",
+      width: 180,
+      render: (url) => renderFileCell(url, "查看介绍"),
+    },
+    {
       title: "操作",
       key: "action",
       width: 100,
@@ -1137,7 +1220,7 @@ function BasicConditionTab({ keshi, groupPath, currentUser }) {
               showSizeChanger: true,
               showTotal: (t) => `共 ${t} 条`,
             }}
-            scroll={{ x: 1100 }}
+            scroll={{ x: 1460 }}
             locale={{
               emptyText: "暂无基础条件数据，请在下方「填报」区域提交",
             }}
@@ -1156,6 +1239,8 @@ function BasicConditionTab({ keshi, groupPath, currentUser }) {
             inpatientCount: undefined,
             avgDailyOutpatientCount: undefined,
             diseaseSource: "",
+            departmentPhoto: [],
+            departmentIntroduction: [],
           }}
         >
           <div style={{ marginBottom: 12, color: "#666" }}>
@@ -1269,6 +1354,40 @@ function BasicConditionTab({ keshi, groupPath, currentUser }) {
                 showCount
                 maxLength={500}
               />
+            </Form.Item>
+          </Col>
+
+          <Col xs={24} md={12}>
+            <Form.Item
+              label="科室合照上传"
+              name="departmentPhoto"
+              valuePropName="fileList"
+              getValueFromEvent={normUploadFileList}
+            >
+              <Upload
+                beforeUpload={() => false}
+                maxCount={1}
+                accept=".jpg,.jpeg,.png,.webp,.pdf"
+              >
+                <Button icon={<UploadOutlined />}>选择文件</Button>
+              </Upload>
+            </Form.Item>
+          </Col>
+
+          <Col xs={24} md={12}>
+            <Form.Item
+              label="科室介绍上传"
+              name="departmentIntroduction"
+              valuePropName="fileList"
+              getValueFromEvent={normUploadFileList}
+            >
+              <Upload
+                beforeUpload={() => false}
+                maxCount={1}
+                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+              >
+                <Button icon={<UploadOutlined />}>选择文件</Button>
+              </Upload>
             </Form.Item>
           </Col>
         </Row>
@@ -3952,4 +4071,3 @@ function FileSystemTab({ keshi, groupPath, isApprover }) {
 }
 
 export default KeshiManagement;
-

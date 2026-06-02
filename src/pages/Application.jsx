@@ -273,6 +273,7 @@ function Application() {
       trialTypes: [],
       specialty: "",
       piPhoto: null, // PI形象照
+      idCardCopy: null, // 身份证复印件
       seniorTitleCertificate: null, // 高级职称证书
       seniorTitleAppointment: null, // 高级职称受聘证明文件
       signedResume: null, // 签字版简历
@@ -419,6 +420,7 @@ function Application() {
       // 基本字段
       formData.append("Id", currentUser?.id || "");
       formData.append("professional", types.group ? groupForm.specialty : piForm.specialty || "");
+      formData.append("applyType", types.group ? "1" : "0");
       formData.append("shanchang", piForm.expertise || "");
       formData.append("clinicalParticipation", piForm.trialProofs.length > 0);
       if (piForm.noProofReason) {
@@ -478,6 +480,12 @@ function Application() {
       const piPhotoFile = getFileObj(piForm.piPhoto);
       if (piPhotoFile) {
         formData.append("piPhoto", piPhotoFile);
+      }
+
+      // 身份证复印件
+      const idCardCopyFile = getFileObj(piForm.idCardCopy);
+      if (idCardCopyFile) {
+        formData.append("idCardCopy", idCardCopyFile);
       }
 
       // 高级职称证书
@@ -1082,6 +1090,19 @@ function Application() {
                         >
                           <Button type="dashed" icon={<PaperClipOutlined />}>
                             上传 PI 形象照
+                          </Button>
+                        </Upload>
+                      </Form.Item>
+                      <Form.Item label="身份证复印件">
+                        <Upload
+                          beforeUpload={handleFile(setPiForm, "idCardCopy")}
+                          maxCount={1}
+                          accept=".pdf,.jpg,.jpeg,.png"
+                          listType="text"
+                          onPreview={handlePreview}
+                        >
+                          <Button type="dashed" icon={<PaperClipOutlined />}>
+                            上传身份证复印件
                           </Button>
                         </Upload>
                       </Form.Item>

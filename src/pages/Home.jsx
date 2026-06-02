@@ -612,6 +612,9 @@ function Home() {
             <Descriptions.Item label="PI形象照" span={2}>
               <FileLink url={selectedPi.piPhotoPath} label="查看照片" />
             </Descriptions.Item>
+            <Descriptions.Item label="身份证复印件" span={2}>
+              <FileLink url={selectedPi.idCardCopyPath} label="查看身份证复印件" />
+            </Descriptions.Item>
             <Descriptions.Item label="高级职称证书" span={2}>
               <FileLink
                 url={selectedPi.seniorTitleCertificatePath}

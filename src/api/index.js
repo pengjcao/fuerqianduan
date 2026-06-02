@@ -133,7 +133,7 @@ export const professionalGroupMemberApi = {
 
 // 专业组基本条件相关 API（科室/专业组资质 - 基本条件）
 export const basicConditionApi = {
-  // 填报基础条件（POST /user/basicCondition/report）
+  // 填报基础条件（POST /user/basicCondition/report，支持 FormData）
   report: (data) => request.post("/user/basicCondition/report", data),
 
   // 查询基础条件详情（GET /user/basicCondition/detail?keshi=xxx）
