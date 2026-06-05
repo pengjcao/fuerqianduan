@@ -209,6 +209,70 @@ function Home() {
     );
   };
 
+  const clinicalMaterialFields = [
+    { label: "国家药监局批件", arrayKey: "nmpaApprovalPaths", legacyKeys: ["nmpaApproval", "nmpaApprovalPath"] },
+    { label: "授权分工表", arrayKey: "delegationTablePaths", legacyKeys: ["delegationTable", "delegationTablePath"] },
+    { label: "培训记录表", arrayKey: "trainingRecordPaths", legacyKeys: ["trainingRecord", "trainingRecordPath"] },
+    { label: "过程性文件", arrayKey: "processFilesPaths", legacyKeys: ["processFiles", "processFilesPath"] },
+    { label: "分中心小结表", arrayKey: "completionFilesPaths", legacyKeys: ["completionFiles", "completionFilesPath"] },
+    { label: "其他证明材料", arrayKey: "otherFilesPaths", legacyKeys: ["otherFiles", "otherFilesPath"] },
+  ];
+
+  const getMaterialUrls = (material, field) => {
+    const value =
+      material?.[field.arrayKey] ??
+      field.legacyKeys.map((key) => material?.[key]).find(Boolean);
+    if (!value) return [];
+    if (Array.isArray(value)) return value.filter(Boolean);
+    return String(value)
+      .split(/\r?\n|,/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  };
+
+  const ClinicalMaterialsView = ({ materials }) => {
+    if (!materials || materials.length === 0) {
+      return <Text type="secondary">未上传</Text>;
+    }
+
+    return (
+      <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+        {materials.map((material, index) => (
+          <div
+            key={material.id || index}
+            style={{ border: "1px solid #f0f0f0", padding: 12, borderRadius: 4 }}
+          >
+            <div style={{ fontWeight: 600, marginBottom: 8 }}>
+              项目 {index + 1}：{material.projectName || "未填写项目名称"}
+            </div>
+            <Space direction="vertical" size={4}>
+              {clinicalMaterialFields.map((field) => {
+                const urls = getMaterialUrls(material, field);
+                if (urls.length === 0) return null;
+                return (
+                  <div key={field.arrayKey}>
+                    <Text type="secondary" style={{ marginRight: 8 }}>
+                      {field.label}：
+                    </Text>
+                    <Space wrap>
+                      {urls.map((url, fileIndex) => (
+                        <FileLink
+                          key={`${field.arrayKey}-${fileIndex}`}
+                          url={url}
+                          label={urls.length > 1 ? `${field.label}${fileIndex + 1}` : "查看文件"}
+                        />
+                      ))}
+                    </Space>
+                  </div>
+                );
+              })}
+            </Space>
+          </div>
+        ))}
+      </Space>
+    );
+  };
+
   const tableColumns = [
     {
       title: "头像",
@@ -645,27 +709,9 @@ function Home() {
             <Descriptions.Item label="GCP证书" span={2}>
               <FileLink url={selectedPi.gcpCertificatePath} label="查看证书" />
             </Descriptions.Item>
-            {selectedPi.clinicalMaterials &&
-              selectedPi.clinicalMaterials.length > 0 && (
-                <Descriptions.Item label="临床试验材料" span={2}>
-                  <Space direction="vertical" size="small">
-                    {selectedPi.clinicalMaterials.map((material, index) => (
-                      <div key={index}>
-                        <Text strong>项目 {index + 1}:</Text>{" "}
-                        {material.projectName || "未命名项目"}
-                        {material.nmpaApproval && (
-                          <div style={{ marginLeft: 16, marginTop: 4 }}>
-                            <FileLink
-                              url={material.nmpaApproval}
-                              label="NMPA批准文件"
-                            />
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </Space>
-                </Descriptions.Item>
-              )}
+            <Descriptions.Item label="临床试验材料" span={2}>
+              <ClinicalMaterialsView materials={selectedPi.clinicalMaterials} />
+            </Descriptions.Item>
           </Descriptions>
         )}
       </Modal>

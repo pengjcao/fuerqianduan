@@ -3077,6 +3077,7 @@ function SiteFacilityTab({ keshi, groupPath }) {
 
 // 文件体系Tab组件（用于科室管理页面）
 function FileSystemTab({ keshi, groupPath, isApprover }) {
+  const { currentUser } = useContext(AuthContext);
   const [fileSystems, setFileSystems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [createModalVisible, setCreateModalVisible] = useState(false);
@@ -3100,6 +3101,32 @@ function FileSystemTab({ keshi, groupPath, isApprover }) {
   const [historyModalVisible, setHistoryModalVisible] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [fileHistory, setFileHistory] = useState([]);
+  const currentUserId = currentUser?.id || currentUser?.username;
+  const normalizeText = (value) => (value == null ? "" : String(value).trim());
+  const currentKeshi = normalizeText(keshi);
+  const currentGroupPath = normalizeText(groupPath);
+  const isProfessionalGroupContext = !!currentKeshi && !!currentGroupPath;
+  const isOwner = (record) => !!record?.createdBy && record.createdBy === currentUserId;
+  const isCurrentProfessionalGroupRecord = (record) =>
+    isProfessionalGroupContext &&
+    normalizeText(record?.keshi) === currentKeshi &&
+    normalizeText(record?.groupPath) === currentGroupPath;
+  const canUseSystemInCurrentGroup = (record) => {
+    if (!currentUserId || !isProfessionalGroupContext) return false;
+    const recordKeshi = normalizeText(record?.keshi);
+    const recordGroupPath = normalizeText(record?.groupPath);
+    if (!recordKeshi) return true;
+    if (recordKeshi !== currentKeshi) return false;
+    return !recordGroupPath || recordGroupPath === currentGroupPath;
+  };
+  const canCreateSystem = !!currentUserId;
+  const canManageSystem = (record) =>
+    isApprover || isOwner(record) || isCurrentProfessionalGroupRecord(record);
+  const canManageFile = (record) =>
+    isApprover || isOwner(record) || isCurrentProfessionalGroupRecord(record);
+  const canUploadToSelectedSystem =
+    selectedSystem &&
+    (isApprover || isOwner(selectedSystem) || canUseSystemInCurrentGroup(selectedSystem));
 
   // 获取文件体系列表
   const fetchFileSystems = async () => {
@@ -3445,7 +3472,7 @@ function FileSystemTab({ keshi, groupPath, isApprover }) {
           >
             查看文件
           </Button>
-          {isApprover && record?.isFixed !== true && (
+          {canManageSystem(record) && record?.isFixed !== true && (
             <Button
               type="link"
               danger
@@ -3562,7 +3589,7 @@ function FileSystemTab({ keshi, groupPath, isApprover }) {
           >
             历史
           </Button>
-          {isApprover && (
+          {canManageFile(record) && (
             <>
               <Button
                 type="link"
@@ -3624,7 +3651,7 @@ function FileSystemTab({ keshi, groupPath, isApprover }) {
             </Space>
           }
           extra={
-            isApprover ? (
+            canUploadToSelectedSystem ? (
               <Button
                 type="primary"
                 icon={<UploadOutlined />}
@@ -3866,6 +3893,18 @@ function FileSystemTab({ keshi, groupPath, isApprover }) {
             dataSource={fileHistory}
             columns={[
               {
+                title: "版本",
+                dataIndex: "versionType",
+                key: "versionType",
+                width: 100,
+                render: (text) =>
+                  text === "当前版本" ? (
+                    <Tag color="green">当前版本</Tag>
+                  ) : (
+                    <Tag color="blue">历史版本</Tag>
+                  ),
+              },
+              {
                 title: "文件名",
                 dataIndex: "fileName",
                 key: "fileName",
@@ -3919,7 +3958,9 @@ function FileSystemTab({ keshi, groupPath, isApprover }) {
                 render: (_, record) => formatDate(record.createdTime),
               },
             ]}
-            rowKey="id"
+            rowKey={(record, index) =>
+              record.id ? `${record.versionType || "history"}-${record.id}` : `current-${selectedFile?.id || index}`
+            }
             loading={historyLoading}
             pagination={{
               pageSize: 10,
@@ -3950,7 +3991,7 @@ function FileSystemTab({ keshi, groupPath, isApprover }) {
           文件体系
         </Text>
         <Space>
-          {isApprover && (
+          {canCreateSystem && (
             <Button
               type="primary"
               icon={<PlusOutlined />}

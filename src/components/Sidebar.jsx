@@ -41,7 +41,7 @@ const navItems = [
           {
             to: "/institution/files",
             label: "文件体系",
-            roles: ["admin", "secretary", "director", "chief"],
+            roles: ["admin", "pi", "secretary", "director", "chief"],
           },
         ],
       },

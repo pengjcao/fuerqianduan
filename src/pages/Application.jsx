@@ -291,6 +291,7 @@ function Application() {
           trainingRecord: [], // 培训记录表
           processFiles: [], // 参与试验的过程性文件
           centerSummary: [], // 分中心小结表
+          otherFiles: [], // 其他证明材料
         },
       ],
       // 若所有证明材料都删除，显示此说明原因
@@ -392,6 +393,7 @@ function Application() {
           trainingRecord: [],
           processFiles: [],
           centerSummary: [],
+          otherFiles: [],
         },
       ],
     }));
@@ -416,13 +418,38 @@ function Application() {
     try {
       // 构建 FormData，匹配后端 PiInfoDTO 格式
       const formData = new FormData();
+      const clinicalFileMappings = [
+        { frontKey: "approvalDoc", backendKey: "nmpaApproval" },
+        { frontKey: "authorizationTable", backendKey: "delegationTable" },
+        { frontKey: "trainingRecord", backendKey: "trainingRecord" },
+        { frontKey: "processFiles", backendKey: "processFiles" },
+        { frontKey: "centerSummary", backendKey: "completionFiles" },
+        { frontKey: "otherFiles", backendKey: "otherFiles" },
+      ];
+      const getFileObj = (fileObj) => {
+        if (!fileObj) return null;
+        if (fileObj instanceof File) {
+          return fileObj;
+        }
+        if (fileObj.originFileObj && fileObj.originFileObj instanceof File) {
+          return fileObj.originFileObj;
+        }
+        return null;
+      };
+      const hasClinicalFiles = (proof) =>
+        clinicalFileMappings.some(({ frontKey }) =>
+          (proof[frontKey] || []).some((file) => !!getFileObj(file))
+        );
+      const activeTrialProofs = piForm.trialProofs.filter(
+        (proof) => (proof.projectName || "").trim() || hasClinicalFiles(proof)
+      );
 
       // 基本字段
       formData.append("Id", currentUser?.id || "");
       formData.append("professional", types.group ? groupForm.specialty : piForm.specialty || "");
       formData.append("applyType", types.group ? "1" : "0");
       formData.append("shanchang", piForm.expertise || "");
-      formData.append("clinicalParticipation", piForm.trialProofs.length > 0);
+      formData.append("clinicalParticipation", activeTrialProofs.length > 0);
       if (piForm.noProofReason) {
         formData.append("clinicalReason", piForm.noProofReason);
       }
@@ -446,18 +473,6 @@ function Application() {
           formData.append("hospitalAreas", area);
         });
 
-        // selfAssessmentReport: 专业组自评报告
-        const getFileObj = (fileObj) => {
-          if (!fileObj) return null;
-          if (fileObj instanceof File) {
-            return fileObj;
-          }
-          if (fileObj.originFileObj && fileObj.originFileObj instanceof File) {
-            return fileObj.originFileObj;
-          }
-          return null;
-        };
-
         const selfReportFile = getFileObj(groupForm.selfReport);
         if (selfReportFile) {
           formData.append("selfAssessmentReport", selfReportFile);
@@ -465,17 +480,6 @@ function Application() {
       }
 
       // PI相关文件字段
-      const getFileObj = (fileObj) => {
-        if (!fileObj) return null;
-        if (fileObj instanceof File) {
-          return fileObj;
-        }
-        if (fileObj.originFileObj && fileObj.originFileObj instanceof File) {
-          return fileObj.originFileObj;
-        }
-        return null;
-      };
-
       // PI形象照
       const piPhotoFile = getFileObj(piForm.piPhoto);
       if (piPhotoFile) {
@@ -527,22 +531,20 @@ function Application() {
       }
 
       // 参与临床试验证明材料（clinicalMaterials）
-      piForm.trialProofs.forEach((proof, index) => {
+      activeTrialProofs.forEach((proof, index) => {
         formData.append(
           `clinicalMaterials[${index}].projectName`,
           proof.projectName || ""
         );
 
-        if (
-          proof.approvalDoc &&
-          proof.approvalDoc.length > 0 &&
-          proof.approvalDoc[0]?.originFileObj
-        ) {
-          formData.append(
-            `clinicalMaterials[${index}].nmpaApproval`,
-            proof.approvalDoc[0].originFileObj
-          );
-        }
+        clinicalFileMappings.forEach(({ frontKey, backendKey }) => {
+          (proof[frontKey] || []).forEach((file) => {
+            const rawFile = getFileObj(file);
+            if (rawFile) {
+              formData.append(`clinicalMaterials[${index}].${backendKey}`, rawFile);
+            }
+          });
+        });
       });
 
       // 根据是否勾选"新增专业组"调用不同接口
@@ -1443,6 +1445,45 @@ function Application() {
                                           removeProofFile(
                                             proof.id,
                                             "centerSummary",
+                                            idx
+                                          )
+                                        }
+                                        style={{ marginBottom: 4 }}
+                                      >
+                                        {file.name}
+                                      </Tag>
+                                    ))}
+                                  </div>
+                                )}
+                              </Form.Item>
+
+                              <Form.Item label="其他证明材料（可上传多个）">
+                                <Upload
+                                  beforeUpload={handleProofFile(
+                                    proof.id,
+                                    "otherFiles"
+                                  )}
+                                  multiple
+                                  listType="text"
+                                  onPreview={handlePreview}
+                                >
+                                  <Button
+                                    type="dashed"
+                                    icon={<PaperClipOutlined />}
+                                  >
+                                    上传其他证明材料
+                                  </Button>
+                                </Upload>
+                                {proof.otherFiles.length > 0 && (
+                                  <div style={{ marginTop: 8 }}>
+                                    {proof.otherFiles.map((file, idx) => (
+                                      <Tag
+                                        key={idx}
+                                        closable
+                                        onClose={() =>
+                                          removeProofFile(
+                                            proof.id,
+                                            "otherFiles",
                                             idx
                                           )
                                         }

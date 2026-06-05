@@ -90,7 +90,7 @@ function App() {
               path="/institution/files"
               element={
                 <RequireAuth
-                  roles={["admin", "secretary", "director", "chief"]}
+                  roles={["admin", "pi", "secretary", "director", "chief"]}
                 >
                   <InstitutionFiles />
                 </RequireAuth>

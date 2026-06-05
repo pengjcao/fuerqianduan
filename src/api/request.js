@@ -9,7 +9,7 @@ const baseURL = "/api";
 // 创建 axios 实例
 const request = axios.create({
   baseURL,
-  timeout: 10000,
+  timeout: 120000,
 });
 
 // 请求拦截器 - 添加 token 和权限信息
@@ -74,6 +74,14 @@ request.interceptors.response.use(
 
     if (error.response?.status === 403) {
       console.error("权限不足", error.response.data?.msg);
+    }
+
+    if (error.response?.status === 413) {
+      return Promise.reject({
+        success: false,
+        message: "上传文件过大，请压缩文件或联系管理员调整上传大小限制",
+        data: null,
+      });
     }
 
     // 如果后端返回了 Result 格式的错误

@@ -13,7 +13,7 @@ import {
   Divider,
   Typography,
 } from "antd";
-import { PlusOutlined, UploadOutlined, HistoryOutlined, DeleteOutlined } from "@ant-design/icons";
+import { PlusOutlined, UploadOutlined, HistoryOutlined, DeleteOutlined, LinkOutlined } from "@ant-design/icons";
 import { institutionFileSystemApi } from "../api";
 import { AuthContext } from "../context/AuthContext";
 import { formatBackendDateTime } from "../utils/formatBackendDateTime";
@@ -37,8 +37,13 @@ function InstitutionFiles() {
   const [uploadForm] = Form.useForm();
   const [overwriteForm] = Form.useForm();
 
-  // 判断是否为审批者（包括 pi）
-  const isApprover = currentUser && (currentUser.role === "admin" || currentUser.role === "secretary" || currentUser.role === "director" || currentUser.role === "chief" || currentUser.role === "pi");
+  // 机构文件体系：研究者可查看，只有管理/审批角色可编辑
+  const canEdit = currentUser && (
+    currentUser.role === "admin" ||
+    currentUser.role === "secretary" ||
+    currentUser.role === "director" ||
+    currentUser.role === "chief"
+  );
 
   useEffect(() => {
     fetchFileSystems();
@@ -296,7 +301,7 @@ function InstitutionFiles() {
           >
             查看文件
           </Button>
-          {isApprover && !record.isFixed && (
+          {canEdit && !record.isFixed && (
             <Button
               type="link"
               danger
@@ -327,10 +332,18 @@ function InstitutionFiles() {
       width: 200,
     },
     {
-      title: "文件路径",
+      title: "文件",
       dataIndex: "currentPath",
       key: "currentPath",
       ellipsis: true,
+      render: (url) =>
+        url ? (
+          <a href={url} target="_blank" rel="noopener noreferrer">
+            <LinkOutlined /> 查看/下载
+          </a>
+        ) : (
+          "-"
+        ),
     },
     {
       title: "状态",
@@ -369,7 +382,7 @@ function InstitutionFiles() {
       fixed: "right",
       render: (_, record) => (
         <Space>
-          {record.isActive === 1 && (
+          {canEdit && record.isActive === 1 && (
             <Button
               type="link"
               size="small"
@@ -389,7 +402,7 @@ function InstitutionFiles() {
           >
             历史记录
           </Button>
-          {record.isActive === 1 && (
+          {canEdit && record.isActive === 1 && (
             <Button
               type="link"
               size="small"
@@ -398,15 +411,17 @@ function InstitutionFiles() {
               失效
             </Button>
           )}
-          <Button
-            type="link"
-            danger
-            size="small"
-            icon={<DeleteOutlined />}
-            onClick={() => handleDeleteFile(record.id)}
-          >
-            删除
-          </Button>
+          {canEdit && (
+            <Button
+              type="link"
+              danger
+              size="small"
+              icon={<DeleteOutlined />}
+              onClick={() => handleDeleteFile(record.id)}
+            >
+              删除
+            </Button>
+          )}
         </Space>
       ),
     },
@@ -416,7 +431,7 @@ function InstitutionFiles() {
     <div>
       <div style={{ marginBottom: 16, display: "flex", justifyContent: "space-between" }}>
         <h1 className="page-heading">机构文件体系</h1>
-        {isApprover && (
+        {canEdit && (
           <Button
             type="primary"
             icon={<PlusOutlined />}
@@ -446,7 +461,7 @@ function InstitutionFiles() {
           title={`文件列表 - ${selectedFileSystem.systemName}`}
           style={{ marginTop: 16 }}
           extra={
-            isApprover && (
+            canEdit && (
               <Button
                 type="primary"
                 icon={<UploadOutlined />}
@@ -607,27 +622,63 @@ function InstitutionFiles() {
               render: (_, __, index) => index + 1,
             },
             {
-              title: "文件路径",
-              dataIndex: "filePath",
-              key: "filePath",
+              title: "版本",
+              dataIndex: "versionType",
+              key: "versionType",
+              width: 100,
+              render: (text) =>
+                text === "当前版本" ? (
+                  <Tag color="green">当前版本</Tag>
+                ) : (
+                  <Tag color="blue">历史版本</Tag>
+                ),
+            },
+            {
+              title: "文件名",
+              dataIndex: "fileName",
+              key: "fileName",
               ellipsis: true,
             },
             {
-              title: "上传时间",
-              dataIndex: "uploadTime",
-              key: "uploadTime",
+              title: "文件",
+              dataIndex: "currentPath",
+              key: "currentPath",
+              width: 140,
+              render: (url) =>
+                url ? (
+                  <a href={url} target="_blank" rel="noopener noreferrer">
+                    <LinkOutlined /> 查看/下载
+                  </a>
+                ) : (
+                  "-"
+                ),
+            },
+            {
+              title: "操作人",
+              dataIndex: "operatedBy",
+              key: "operatedBy",
+              width: 120,
+              render: (text) => text || "未知",
+            },
+            {
+              title: "备注",
+              dataIndex: "remark",
+              key: "remark",
+              ellipsis: true,
+              render: (text) => text || "-",
+            },
+            {
+              title: "操作时间",
+              dataIndex: "createdTime",
+              key: "createdTime",
               width: 180,
               render: (value) => formatBackendDateTime(value),
             },
-            {
-              title: "上传人",
-              dataIndex: "uploadBy",
-              key: "uploadBy",
-              width: 120,
-            },
           ]}
           dataSource={fileHistory}
-          rowKey={(record, index) => index}
+          rowKey={(record, index) =>
+            record.id ? `${record.versionType || "history"}-${record.id}` : `current-${index}`
+          }
           pagination={false}
           size="small"
         />
