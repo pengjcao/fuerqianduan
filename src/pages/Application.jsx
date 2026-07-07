@@ -290,7 +290,7 @@ function Application() {
           authorizationTable: [], // 授权分工表
           trainingRecord: [], // 培训记录表
           processFiles: [], // 参与试验的过程性文件
-          centerSummary: [], // 分中心小结表
+          centerSummary: [], // 结题证明文件如分中心小结表
           otherFiles: [], // 其他证明材料
         },
       ],
@@ -1259,7 +1259,7 @@ function Application() {
 
                           <Row gutter={16}>
                             <Col span={12}>
-                              <Form.Item label="国家药监局批件（可上传多个）">
+                              <Form.Item label="国家药监局批件">
                                 <Upload
                                   beforeUpload={handleProofFile(
                                     proof.id,
@@ -1298,7 +1298,7 @@ function Application() {
                                 )}
                               </Form.Item>
 
-                              <Form.Item label="授权分工表（可上传多个）">
+                              <Form.Item label="授权分工表">
                                 <Upload
                                   beforeUpload={handleProofFile(
                                     proof.id,
@@ -1339,7 +1339,7 @@ function Application() {
                                 )}
                               </Form.Item>
 
-                              <Form.Item label="培训记录表（可上传多个）">
+                              <Form.Item label="培训记录表">
                                 <Upload
                                   beforeUpload={handleProofFile(
                                     proof.id,
@@ -1379,7 +1379,7 @@ function Application() {
                               </Form.Item>
                             </Col>
                             <Col span={12}>
-                              <Form.Item label="参与试验的过程性文件（可上传多个）">
+                              <Form.Item label="参与试验的过程性文件">
                                 <Upload
                                   beforeUpload={handleProofFile(
                                     proof.id,
@@ -1393,7 +1393,7 @@ function Application() {
                                     type="dashed"
                                     icon={<PaperClipOutlined />}
                                   >
-                                    上传病例报告表、随访记录等
+                                    上传知情同意书、随访记录、检查检验单等
                                   </Button>
                                 </Upload>
                                 {proof.processFiles.length > 0 && (
@@ -1418,7 +1418,7 @@ function Application() {
                                 )}
                               </Form.Item>
 
-                              <Form.Item label="分中心小结表（可上传多个）">
+                              <Form.Item label="结题证明文件如分中心小结表">
                                 <Upload
                                   beforeUpload={handleProofFile(
                                     proof.id,
@@ -1432,7 +1432,7 @@ function Application() {
                                     type="dashed"
                                     icon={<PaperClipOutlined />}
                                   >
-                                    上传分中心总结文件
+                                    上传结题证明文件
                                   </Button>
                                 </Upload>
                                 {proof.centerSummary.length > 0 && (
@@ -1457,7 +1457,7 @@ function Application() {
                                 )}
                               </Form.Item>
 
-                              <Form.Item label="其他证明材料（可上传多个）">
+                              <Form.Item label="其他证明材料">
                                 <Upload
                                   beforeUpload={handleProofFile(
                                     proof.id,

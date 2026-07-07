@@ -50,7 +50,7 @@ if (useMock) {
       username: "pi",
       password: "123456",
       role: "pi",
-      displayName: "示例研究者（PI）",
+      displayName: "示例研究者",
       dept: "肿瘤科",
     },
     {

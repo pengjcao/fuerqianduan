@@ -274,6 +274,12 @@ function KeshiManagement() {
       formData.append("groupPath", selectedGroup.groupPath);
       formData.append("personType", values.personType);
       formData.append("name", values.name);
+      if (values.academicPosition) {
+        formData.append("academicPosition", values.academicPosition);
+      }
+      if (values.talentTitle) {
+        formData.append("talentTitle", values.talentTitle);
+      }
       
       // roles 是多选数组，需要转换为字符串或分别添加
       if (values.roles && Array.isArray(values.roles)) {
@@ -321,7 +327,7 @@ function KeshiManagement() {
         message.success("添加研究团队成员成功");
         memberForm.resetFields();
         setMemberModalVisible(false);
-        fetchTeamMembers();
+        await fetchTeamMembers();
       } else {
         message.error(response.message || "添加研究团队成员失败");
       }
@@ -347,6 +353,27 @@ function KeshiManagement() {
     memberForm.resetFields();
   };
 
+  const handleMemberUploadPreview = (file) => {
+    const rawFile = file?.originFileObj || file;
+    const src =
+      file?.url ||
+      file?.thumbUrl ||
+      (rawFile && typeof Blob !== "undefined" && rawFile instanceof Blob
+        ? URL.createObjectURL(rawFile)
+        : "");
+
+    if (!src) {
+      message.info("当前文件暂不支持预览");
+      return;
+    }
+
+    window.open(src, "_blank", "noopener,noreferrer");
+
+    if (!file?.url && !file?.thumbUrl) {
+      window.setTimeout(() => URL.revokeObjectURL(src), 60000);
+    }
+  };
+
   // 解析专业组路径，判断是否有两级（用斜杠分开）
   const parseGroupPath = (groupPath) => {
     if (!groupPath) return { level1: "", level2: null };
@@ -357,6 +384,53 @@ function KeshiManagement() {
       return { level1: parts[0], level2: parts.slice(1).join("/") };
     }
     return { level1: groupPath, level2: null };
+  };
+
+  const isTeamFileImage = (url) => {
+    if (!url || typeof url !== "string") return false;
+    return /\.(jpe?g|png|gif|webp|bmp|svg)$/i.test(url.split("?")[0]);
+  };
+
+  const renderTeamFileList = (files) => {
+    const visibleFiles = files.filter((file) => file.url);
+    if (visibleFiles.length === 0) return "-";
+
+    return (
+      <Space direction="vertical" size={8} style={{ width: "100%" }}>
+        {visibleFiles.map((file) => (
+          <a
+            key={file.key}
+            href={file.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              color: "#1890ff",
+            }}
+          >
+            {isTeamFileImage(file.url) ? (
+              <img
+                src={file.url}
+                alt={file.label}
+                style={{
+                  width: 72,
+                  height: 48,
+                  objectFit: "cover",
+                  borderRadius: 4,
+                  border: "1px solid #e5e7eb",
+                  flex: "0 0 auto",
+                }}
+              />
+            ) : (
+              <FileOutlined style={{ fontSize: 18, flex: "0 0 auto" }} />
+            )}
+            <span>{file.label}</span>
+          </a>
+        ))}
+      </Space>
+    );
   };
 
   const columns = [
@@ -469,16 +543,33 @@ function KeshiManagement() {
                           title: "姓名",
                           dataIndex: "name",
                           key: "name",
+                          width: 120,
+                        },
+                        {
+                          title: "学术任职（国家级/省级）",
+                          dataIndex: "academicPosition",
+                          key: "academicPosition",
+                          width: 180,
+                          render: (text) => text || "-",
+                        },
+                        {
+                          title: "人才称号",
+                          dataIndex: "talentTitle",
+                          key: "talentTitle",
+                          width: 140,
+                          render: (text) => text || "-",
                         },
                         {
                           title: "人员类型",
                           dataIndex: "personType",
                           key: "personType",
+                          width: 120,
                         },
                         {
                           title: "专业组任职",
                           dataIndex: "rolesList",
                           key: "roles",
+                          width: 220,
                           render: (rolesList) => {
                             if (!rolesList || !Array.isArray(rolesList)) return "-";
                             return (
@@ -493,80 +584,54 @@ function KeshiManagement() {
                         {
                           title: "简历",
                           key: "resume",
-                          render: (record) => {
-                            const parts = [];
-                            if (record.resumeText) {
-                              parts.push(
-                                <div key="text" style={{ marginBottom: 4 }}>
-                                  <Text ellipsis style={{ maxWidth: 300, display: "block" }}>
+                          width: 260,
+                          render: (_, record) => {
+                            if (!record.resumeText && !record.resumeFileUrl) {
+                              return "-";
+                            }
+
+                            return (
+                              <Space direction="vertical" size={8} style={{ width: "100%" }}>
+                                {record.resumeText ? (
+                                  <Text ellipsis style={{ maxWidth: 240, display: "block" }}>
                                     {record.resumeText}
                                   </Text>
-                                </div>
-                              );
-                            }
-                            if (record.resumeFileUrl) {
-                              parts.push(
-                                <div key="file">
-                                  <a
-                                    href={record.resumeFileUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    style={{ color: "#1890ff" }}
-                                  >
-                                    查看简历文件
-                                  </a>
-                                </div>
-                              );
-                            }
-                            return parts.length > 0 ? <div>{parts}</div> : "-";
+                                ) : null}
+                                {record.resumeFileUrl
+                                  ? renderTeamFileList([
+                                      {
+                                        key: "resume",
+                                        label: "简历文件",
+                                        url: record.resumeFileUrl,
+                                      },
+                                    ])
+                                  : null}
+                              </Space>
+                            );
                           },
                         },
                         {
                           title: "证书",
                           key: "certificates",
-                          render: (record) => {
-                            const certs = [];
-                            if (record.gcpCertUrl) {
-                              certs.push(
-                                <a
-                                  key="gcp"
-                                  href={record.gcpCertUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  style={{ 
-                                    display: "block", 
-                                    marginBottom: 4,
-                                    color: "#1890ff",
-                                    textDecoration: "underline"
-                                  }}
-                                >
-                                  GCP证书
-                                </a>
-                              );
-                            }
-                            if (record.practiceCertUrl) {
-                              certs.push(
-                                <a
-                                  key="practice"
-                                  href={record.practiceCertUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  style={{ 
-                                    display: "block",
-                                    color: "#1890ff",
-                                    textDecoration: "underline"
-                                  }}
-                                >
-                                  执业证书
-                                </a>
-                              );
-                            }
-                            return certs.length > 0 ? <div>{certs}</div> : "-";
-                          },
+                          width: 260,
+                          render: (_, record) =>
+                            renderTeamFileList([
+                              {
+                                key: "gcp",
+                                label: "GCP证书",
+                                url: record.gcpCertUrl,
+                              },
+                              {
+                                key: "practice",
+                                label: "执业证书",
+                                url: record.practiceCertUrl,
+                              },
+                            ]),
                         },
                       ]}
                       rowKey="id"
                       loading={memberLoading}
+                      scroll={{ x: 1260 }}
                       pagination={{
                         pageSize: 10,
                         showSizeChanger: true,
@@ -743,6 +808,8 @@ function KeshiManagement() {
           initialValues={{
             personType: undefined,
             name: "",
+            academicPosition: "",
+            talentTitle: "",
             roles: [],
             resumeText: "",
           }}
@@ -773,6 +840,20 @@ function KeshiManagement() {
             rules={[{ required: true, message: "请输入姓名" }]}
           >
             <Input placeholder="请输入姓名" />
+          </Form.Item>
+
+          <Form.Item
+            label="学术任职（国家级/省级）"
+            name="academicPosition"
+          >
+            <Input placeholder="请输入学术任职（国家级/省级）" />
+          </Form.Item>
+
+          <Form.Item
+            label="人才称号"
+            name="talentTitle"
+          >
+            <Input placeholder="请输入人才称号" />
           </Form.Item>
 
           <Form.Item
@@ -821,6 +902,8 @@ function KeshiManagement() {
           >
             <Upload
               beforeUpload={() => false}
+              onPreview={handleMemberUploadPreview}
+              showUploadList={{ showPreviewIcon: true, showRemoveIcon: true }}
               maxCount={1}
               accept=".pdf,.doc,.docx"
             >
@@ -844,6 +927,8 @@ function KeshiManagement() {
           >
             <Upload
               beforeUpload={() => false}
+              onPreview={handleMemberUploadPreview}
+              showUploadList={{ showPreviewIcon: true, showRemoveIcon: true }}
               maxCount={1}
               accept=".pdf,.jpg,.jpeg,.png"
             >
@@ -867,6 +952,8 @@ function KeshiManagement() {
           >
             <Upload
               beforeUpload={() => false}
+              onPreview={handleMemberUploadPreview}
+              showUploadList={{ showPreviewIcon: true, showRemoveIcon: true }}
               maxCount={1}
               accept=".pdf,.jpg,.jpeg,.png"
             >
@@ -987,8 +1074,11 @@ function BasicConditionTab({ keshi, groupPath, currentUser }) {
     form.resetFields();
     form.setFieldsValue({
       campusList: [],
+      bedYear: undefined,
       bedCount: undefined,
+      inpatientYear: undefined,
       inpatientCount: undefined,
+      avgDailyOutpatientYear: undefined,
       avgDailyOutpatientCount: undefined,
       diseaseSource: "",
       departmentPhoto: [],
@@ -1013,8 +1103,15 @@ function BasicConditionTab({ keshi, groupPath, currentUser }) {
       appendIfPresent(formData, "keshi", keshi);
       appendIfPresent(formData, "createBy", currentUser?.id || currentUser?.username || "");
       appendIfPresent(formData, "campusList", campusListStr);
+      appendIfPresent(formData, "bedYear", values.bedYear);
       appendIfPresent(formData, "bedCount", values.bedCount);
+      appendIfPresent(formData, "inpatientYear", values.inpatientYear);
       appendIfPresent(formData, "inpatientCount", values.inpatientCount);
+      appendIfPresent(
+        formData,
+        "avgDailyOutpatientYear",
+        values.avgDailyOutpatientYear
+      );
       appendIfPresent(
         formData,
         "avgDailyOutpatientCount",
@@ -1066,14 +1163,49 @@ function BasicConditionTab({ keshi, groupPath, currentUser }) {
       .filter(Boolean);
     form.setFieldsValue({
       campusList: campuses,
+      bedYear: record.bedYear ?? undefined,
       bedCount: record.bedCount ?? undefined,
+      inpatientYear: record.inpatientYear ?? undefined,
       inpatientCount: record.inpatientCount ?? undefined,
+      avgDailyOutpatientYear: record.avgDailyOutpatientYear ?? undefined,
       avgDailyOutpatientCount: record.avgDailyOutpatientCount ?? undefined,
       diseaseSource: record.diseaseSource || "",
       departmentPhoto: [],
       departmentIntroduction: [],
     });
     message.success("已回填到表单，可直接修改后再次提交");
+  };
+
+  const setNumberField = (fieldName, rawValue) => {
+    const n = rawValue === "" ? undefined : Number(rawValue);
+    if (rawValue === "" || Number.isFinite(n)) {
+      form.setFieldValue(fieldName, rawValue === "" ? undefined : n);
+    }
+  };
+
+  const handleDeleteBasicCondition = (record) => {
+    if (!record?.id) return;
+    Modal.confirm({
+      title: "删除基础条件记录",
+      content: `确认删除记录 ${record.id} 吗？删除后不可恢复。`,
+      okText: "删除",
+      okButtonProps: { danger: true },
+      cancelText: "取消",
+      onOk: async () => {
+        try {
+          const res = await basicConditionApi.deleteRecord(record.id);
+          if (res?.success) {
+            message.success("基础条件记录删除成功");
+            await fetchDetail();
+          } else {
+            message.error(res?.message || "基础条件记录删除失败");
+          }
+        } catch (e) {
+          console.error("基础条件记录删除失败:", e);
+          message.error(e?.message || "基础条件记录删除失败，请重试");
+        }
+      },
+    });
   };
 
   const detailColumns = [
@@ -1116,6 +1248,14 @@ function BasicConditionTab({ keshi, groupPath, currentUser }) {
       render: (v) => v || "-",
     },
     {
+      title: "床位年份",
+      dataIndex: "bedYear",
+      key: "bedYear",
+      width: 96,
+      align: "center",
+      render: (v) => (v === 0 || v ? `${v}年` : "-"),
+    },
+    {
       title: "床位数",
       dataIndex: "bedCount",
       key: "bedCount",
@@ -1124,12 +1264,28 @@ function BasicConditionTab({ keshi, groupPath, currentUser }) {
       render: (v) => (v === 0 || v ? v : "-"),
     },
     {
+      title: "住院年份",
+      dataIndex: "inpatientYear",
+      key: "inpatientYear",
+      width: 96,
+      align: "center",
+      render: (v) => (v === 0 || v ? `${v}年` : "-"),
+    },
+    {
       title: "住院人数（人次/年）",
       dataIndex: "inpatientCount",
       key: "inpatientCount",
       width: 140,
       align: "center",
       render: (v) => (v === 0 || v ? v : "-"),
+    },
+    {
+      title: "门急诊年份",
+      dataIndex: "avgDailyOutpatientYear",
+      key: "avgDailyOutpatientYear",
+      width: 108,
+      align: "center",
+      render: (v) => (v === 0 || v ? `${v}年` : "-"),
     },
     {
       title: "平均日门急诊量（人次/日）",
@@ -1163,12 +1319,23 @@ function BasicConditionTab({ keshi, groupPath, currentUser }) {
     {
       title: "操作",
       key: "action",
-      width: 100,
+      width: 140,
       fixed: "right",
       render: (_, record) => (
-        <Button type="link" size="small" onClick={() => fillFromRecord(record)}>
-          回填
-        </Button>
+        <Space size="small">
+          <Button type="link" size="small" onClick={() => fillFromRecord(record)}>
+            回填
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            danger
+            icon={<DeleteOutlined />}
+            onClick={() => handleDeleteBasicCondition(record)}
+          >
+            删除
+          </Button>
+        </Space>
       ),
     },
   ];
@@ -1220,7 +1387,7 @@ function BasicConditionTab({ keshi, groupPath, currentUser }) {
               showSizeChanger: true,
               showTotal: (t) => `共 ${t} 条`,
             }}
-            scroll={{ x: 1460 }}
+            scroll={{ x: 1760 }}
             locale={{
               emptyText: "暂无基础条件数据，请在下方「填报」区域提交",
             }}
@@ -1235,8 +1402,11 @@ function BasicConditionTab({ keshi, groupPath, currentUser }) {
           onFinish={handleSubmit}
           initialValues={{
             campusList: [],
+            bedYear: undefined,
             bedCount: undefined,
+            inpatientYear: undefined,
             inpatientCount: undefined,
+            avgDailyOutpatientYear: undefined,
             avgDailyOutpatientCount: undefined,
             diseaseSource: "",
             departmentPhoto: [],
@@ -1278,71 +1448,111 @@ function BasicConditionTab({ keshi, groupPath, currentUser }) {
           </Col>
 
           <Col xs={24} md={12}>
-            <Form.Item
-              label="床位数（XXXX年）"
-              name="bedCount"
-              rules={[
-                { type: "number", min: 0, message: "床位数不能小于 0" },
-              ]}
-            >
-              <Input
-                inputMode="numeric"
-                placeholder="请输入床位数"
-                onChange={(e) => {
-                  const v = e.target.value;
-                  const n = v === "" ? undefined : Number(v);
-                  if (v === "" || Number.isFinite(n)) {
-                    form.setFieldValue("bedCount", v === "" ? undefined : n);
-                  }
-                }}
-              />
+            <Form.Item label="床位数">
+              <Row gutter={8}>
+                <Col span={10}>
+                  <Form.Item
+                    name="bedYear"
+                    rules={[
+                      { type: "number", min: 1900, max: 2100, message: "请输入正确年份" },
+                    ]}
+                  >
+                    <Input
+                      inputMode="numeric"
+                      placeholder="年份"
+                      onChange={(e) => setNumberField("bedYear", e.target.value)}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col span={14}>
+                  <Form.Item
+                    name="bedCount"
+                    rules={[
+                      { type: "number", min: 0, message: "床位数不能小于 0" },
+                    ]}
+                  >
+                    <Input
+                      inputMode="numeric"
+                      placeholder="请输入床位数"
+                      onChange={(e) => setNumberField("bedCount", e.target.value)}
+                    />
+                  </Form.Item>
+                </Col>
+              </Row>
             </Form.Item>
           </Col>
 
           <Col xs={24} md={12}>
-            <Form.Item
-              label="住院人数（XXXX年，人次/年）"
-              name="inpatientCount"
-              rules={[
-                { type: "number", min: 0, message: "住院人数不能小于 0" },
-              ]}
-            >
-              <Input
-                inputMode="numeric"
-                placeholder="请输入住院人数"
-                onChange={(e) => {
-                  const v = e.target.value;
-                  const n = v === "" ? undefined : Number(v);
-                  if (v === "" || Number.isFinite(n)) {
-                    form.setFieldValue("inpatientCount", v === "" ? undefined : n);
-                  }
-                }}
-              />
+            <Form.Item label="住院人数">
+              <Row gutter={8}>
+                <Col span={10}>
+                  <Form.Item
+                    name="inpatientYear"
+                    rules={[
+                      { type: "number", min: 1900, max: 2100, message: "请输入正确年份" },
+                    ]}
+                  >
+                    <Input
+                      inputMode="numeric"
+                      placeholder="年份"
+                      onChange={(e) => setNumberField("inpatientYear", e.target.value)}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col span={14}>
+                  <Form.Item
+                    name="inpatientCount"
+                    rules={[
+                      { type: "number", min: 0, message: "住院人数不能小于 0" },
+                    ]}
+                  >
+                    <Input
+                      inputMode="numeric"
+                      placeholder="请输入住院人数"
+                      onChange={(e) => setNumberField("inpatientCount", e.target.value)}
+                    />
+                  </Form.Item>
+                </Col>
+              </Row>
             </Form.Item>
           </Col>
 
           <Col xs={24} md={12}>
-            <Form.Item
-              label="平均日门急诊量（XXXX年，人次/日）"
-              name="avgDailyOutpatientCount"
-              rules={[
-                { type: "number", min: 0, message: "平均日门急诊量不能小于 0" },
-              ]}
-            >
-              <Input
-                inputMode="numeric"
-                placeholder="请输入平均日门急诊量"
-                onChange={(e) => {
-                  const v = e.target.value;
-                  const n = v === "" ? undefined : Number(v);
-                  if (v === "" || Number.isFinite(n)) {
-                    form.setFieldValue(
-                      "avgDailyOutpatientCount",
-                      v === "" ? undefined : n
-                    );
-                  }
-                }}
-              />
+            <Form.Item label="均日门急诊量">
+              <Row gutter={8}>
+                <Col span={10}>
+                  <Form.Item
+                    name="avgDailyOutpatientYear"
+                    rules={[
+                      { type: "number", min: 1900, max: 2100, message: "请输入正确年份" },
+                    ]}
+                  >
+                    <Input
+                      inputMode="numeric"
+                      placeholder="年份"
+                      onChange={(e) =>
+                        setNumberField("avgDailyOutpatientYear", e.target.value)
+                      }
+                    />
+                  </Form.Item>
+                </Col>
+                <Col span={14}>
+                  <Form.Item
+                    name="avgDailyOutpatientCount"
+                    rules={[
+                      { type: "number", min: 0, message: "均日门急诊量不能小于 0" },
+                    ]}
+                  >
+                    <Input
+                      inputMode="numeric"
+                      placeholder="请输入均日门急诊量"
+                      onChange={(e) =>
+                        setNumberField("avgDailyOutpatientCount", e.target.value)
+                      }
+                    />
+                  </Form.Item>
+                </Col>
+              </Row>
             </Form.Item>
           </Col>
 

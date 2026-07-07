@@ -353,10 +353,6 @@ function Sidebar() {
           .filter((item) => !item.roles?.length || hasRole(item.roles))
           .map((item) => renderNavItem(item))}
       </nav>
-      <div className="sidebar__foot">
-        <div className="sidebar__foot-title">数据日常</div>
-        <p className="sidebar__foot-text">请每天更新在研试验与人员轮转情况。</p>
-      </div>
     </aside>
   );
 }

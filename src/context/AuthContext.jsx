@@ -5,7 +5,7 @@ export const AuthContext = createContext(null);
 
 const roleLabels = {
   admin: "系统管理员",
-  pi: "研究者（PI）",
+  pi: "研究者",
   team: "研究团队成员",
   secretary: "机构办秘书",
   director: "机构办主任",
@@ -18,7 +18,7 @@ const roleLabels = {
 // 任意节点驳回均回到第一步
 const rolePermissions = {
   pi: {
-    label: "研究者（PI）",
+    label: "研究者",
     description: "可发起PI备案申请，查看自己的申请状态",
     canRegister: true,
   },

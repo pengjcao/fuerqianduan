@@ -145,6 +145,20 @@ function Home() {
     }
   };
 
+  const formatDateOnly = (timestamp) => {
+    if (!timestamp) return "未知";
+    try {
+      const date = new Date(timestamp);
+      return date.toLocaleDateString("zh-CN", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      });
+    } catch {
+      return "未知";
+    }
+  };
+
   // 格式化时间数组为日期字符串（后端返回的格式：[2026, 1, 4, 17, 1, 56]）
   const formatTimeArray = (timeArray) => {
     if (!timeArray || !Array.isArray(timeArray) || timeArray.length < 6) {
@@ -214,7 +228,7 @@ function Home() {
     { label: "授权分工表", arrayKey: "delegationTablePaths", legacyKeys: ["delegationTable", "delegationTablePath"] },
     { label: "培训记录表", arrayKey: "trainingRecordPaths", legacyKeys: ["trainingRecord", "trainingRecordPath"] },
     { label: "过程性文件", arrayKey: "processFilesPaths", legacyKeys: ["processFiles", "processFilesPath"] },
-    { label: "分中心小结表", arrayKey: "completionFilesPaths", legacyKeys: ["completionFiles", "completionFilesPath"] },
+    { label: "结题证明文件如分中心小结表", arrayKey: "completionFilesPaths", legacyKeys: ["completionFiles", "completionFilesPath"] },
     { label: "其他证明材料", arrayKey: "otherFilesPaths", legacyKeys: ["otherFiles", "otherFilesPath"] },
   ];
 
@@ -315,7 +329,7 @@ function Home() {
       width: 180,
       render: (_, record) => 
         record.drugAdminRecordTime ? (
-          formatDate(record.drugAdminRecordTime)
+          formatDateOnly(record.drugAdminRecordTime)
         ) : (
           <Text type="secondary">未填写</Text>
         ),
@@ -406,7 +420,7 @@ function Home() {
                                   {pi.drugAdminRecordTime ? (
                                     <>
                                       <Text type="secondary" style={{ fontSize: 12 }}>
-                                        药监局备案时间：{formatDate(pi.drugAdminRecordTime)}
+                                        药监局备案时间：{formatDateOnly(pi.drugAdminRecordTime)}
                                       </Text>
                                     </>
                                   ) : (
@@ -461,7 +475,7 @@ function Home() {
                           {pi.drugAdminRecordTime ? (
                             <>
                               <Text type="secondary">
-                                药监局备案时间：{formatDate(pi.drugAdminRecordTime)}
+                                药监局备案时间：{formatDateOnly(pi.drugAdminRecordTime)}
                               </Text>
                               <br />
                             </>
@@ -643,7 +657,7 @@ function Home() {
             </Descriptions.Item>
             <Descriptions.Item label="药监局备案时间" span={1}>
               {selectedPi.drugAdminRecordTime ? (
-                formatDate(selectedPi.drugAdminRecordTime)
+                formatDateOnly(selectedPi.drugAdminRecordTime)
               ) : (
                 <Text type="secondary">未填写</Text>
               )}

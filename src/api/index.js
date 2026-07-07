@@ -60,8 +60,8 @@ export const piRecordApi = {
   // 不需要传递参数，后端从token中获取当前登录的研究者ID
   getApprovalLogs: () => request.get("/user/piApprovalLogs"),
 
-  // 填写药监局备案时间（POST /user/drug-admin-record-time）
-  // 参数: { piInfoId: number, recordTime: string } (recordTime格式: "yyyy-MM-dd HH:mm:ss")
+  // 填写药监局备案日期（POST /user/drug-admin-record-time）
+  // 参数: { piInfoId: number, recordTime: string } (recordTime格式: "yyyy-MM-dd")
   fillDrugAdminRecordTime: (piInfoId, recordTime) =>
     request.post("/user/drug-admin-record-time", null, {
       params: {
@@ -139,6 +139,10 @@ export const basicConditionApi = {
   // 查询基础条件详情（GET /user/basicCondition/detail?keshi=xxx）
   detail: (keshi) =>
     request.get("/user/basicCondition/detail", { params: { keshi } }),
+
+  // 删除基础条件记录（DELETE /user/basicCondition/delete?id=xxx）
+  deleteRecord: (id) =>
+    request.delete("/user/basicCondition/delete", { params: { id } }),
 };
 
 // 场地设施相关 API（multipart/form-data）

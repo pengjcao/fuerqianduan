@@ -101,6 +101,20 @@ function PiRecords() {
     }
   };
 
+  const formatDateOnly = (timestamp) => {
+    if (!timestamp) return "未知";
+    try {
+      const date = new Date(timestamp);
+      return date.toLocaleDateString("zh-CN", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      });
+    } catch {
+      return "未知";
+    }
+  };
+
   // 判断当前审批者是否可以审批此记录
   // 后端逻辑：当前审批者角色必须等于数据库里的 current_step + 1
   // currentStep 0 -> 需要 role 1 (研究者，但研究者不能审批)
@@ -138,6 +152,20 @@ function PiRecords() {
     // 必须是机构办秘书（role=2）且当前步骤是4
     return roleNumber === 2 && currentStep === 4;
   };
+
+  const prioritizedPiRecords = (piRecords || [])
+    .map((record, index) => ({
+      record,
+      index,
+      needsReview: canReview(record),
+    }))
+    .sort((a, b) => {
+      if (a.needsReview !== b.needsReview) {
+        return a.needsReview ? -1 : 1;
+      }
+      return a.index - b.index;
+    })
+    .map((item) => item.record);
 
   // 处理审批
   const handleReview = async (approve) => {
@@ -187,31 +215,31 @@ function PiRecords() {
   // 处理填写备案时间
   const handleFillRecordTime = async () => {
     if (!selectedRecord || !recordTime) {
-      message.warning("请选择备案时间");
+      message.warning("请选择备案日期");
       return;
     }
 
     setFillingRecordTime(true);
     try {
-      // 格式化时间为 "yyyy-MM-dd HH:mm:ss"
-      const formattedTime = recordTime.format("YYYY-MM-DD HH:mm:ss");
+      // 备案只需要日期，后端会按当天 00:00:00 存储。
+      const formattedTime = recordTime.format("YYYY-MM-DD");
       const response = await piRecordApi.fillDrugAdminRecordTime(
         selectedRecord.piInfoId,
         formattedTime
       );
       
       if (response && response.success) {
-        message.success("药监局备案时间填写成功");
+        message.success("药监局备案日期填写成功");
         setRecordTimeModalVisible(false);
         setRecordTime(null);
         // 刷新列表
         await refreshPiRecords();
       } else {
-        message.error(response?.message || "填写备案时间失败");
+        message.error(response?.message || "填写备案日期失败");
       }
     } catch (error) {
       console.error("Failed to fill record time:", error);
-      message.error(error?.message || "填写备案时间失败，请重试");
+      message.error(error?.message || "填写备案日期失败，请重试");
     } finally {
       setFillingRecordTime(false);
     }
@@ -232,7 +260,7 @@ function PiRecords() {
     { label: "授权分工表", arrayKey: "delegationTablePaths", legacyKeys: ["delegationTable", "delegationTablePath"] },
     { label: "培训记录表", arrayKey: "trainingRecordPaths", legacyKeys: ["trainingRecord", "trainingRecordPath"] },
     { label: "过程性文件", arrayKey: "processFilesPaths", legacyKeys: ["processFiles", "processFilesPath"] },
-    { label: "分中心小结表", arrayKey: "completionFilesPaths", legacyKeys: ["completionFiles", "completionFilesPath"] },
+    { label: "结题证明文件如分中心小结表", arrayKey: "completionFilesPaths", legacyKeys: ["completionFiles", "completionFilesPath"] },
     { label: "其他证明材料", arrayKey: "otherFilesPaths", legacyKeys: ["otherFiles", "otherFilesPath"] },
   ];
 
@@ -392,7 +420,7 @@ function PiRecords() {
         />
       ) : (
         <Table
-          dataSource={piRecords || []}
+          dataSource={prioritizedPiRecords}
           columns={columns}
           rowKey={(record) => `${record.piInfoId || record.id}-${record.submitTime || Date.now()}`}
           pagination={{
@@ -459,7 +487,7 @@ function PiRecords() {
                 openRecordTimeModal(selectedRecord);
               }}
             >
-              填写备案时间
+              填写备案日期
             </Button>
           ),
         ].filter(Boolean)}
@@ -496,7 +524,7 @@ function PiRecords() {
               </Descriptions.Item>
               <Descriptions.Item label="药监局备案时间" span={1}>
                 {selectedRecord.drugAdminRecordTime ? (
-                  formatDate(selectedRecord.drugAdminRecordTime)
+                  formatDateOnly(selectedRecord.drugAdminRecordTime)
                 ) : (
                   <span style={{ color: '#999' }}>未填写</span>
                 )}
@@ -631,7 +659,7 @@ function PiRecords() {
               <div style={{ marginTop: 16, padding: 16, background: '#f5f5f5', borderRadius: 4 }}>
                 <Alert
                   message="机构主任已审核完成"
-                  description="请填写药监局备案时间"
+                  description="请填写药监局备案日期"
                   type="info"
                   showIcon
                   style={{ marginBottom: 12 }}
@@ -641,7 +669,7 @@ function PiRecords() {
                   onClick={() => openRecordTimeModal(selectedRecord)}
                   block
                 >
-                  {selectedRecord.drugAdminRecordTime ? "修改备案时间" : "填写备案时间"}
+                  {selectedRecord.drugAdminRecordTime ? "修改备案日期" : "填写备案日期"}
                 </Button>
               </div>
             )}
@@ -651,7 +679,7 @@ function PiRecords() {
 
       {/* 填写药监局备案时间模态框 */}
       <Modal
-        title={`填写药监局备案时间 - ${selectedRecord?.id || ""}`}
+        title={`填写药监局备案日期 - ${selectedRecord?.id || ""}`}
         open={recordTimeModalVisible}
         onCancel={() => {
           setRecordTimeModalVisible(false);
@@ -668,7 +696,7 @@ function PiRecords() {
           <div>
             <Alert
               message="提示"
-              description="请选择药监局备案的日期和时间"
+              description="请选择药监局备案日期"
               type="info"
               showIcon
               style={{ marginBottom: 16 }}
@@ -678,20 +706,19 @@ function PiRecords() {
               <div style={{ marginBottom: 16 }}>{selectedRecord.piInfoId}</div>
             </div>
             <div>
-              <div style={{ marginBottom: 8, fontWeight: 500 }}>备案时间：</div>
+              <div style={{ marginBottom: 8, fontWeight: 500 }}>备案日期：</div>
               <DatePicker
-                showTime
-                format="YYYY-MM-DD HH:mm:ss"
+                format="YYYY-MM-DD"
                 value={recordTime}
                 onChange={(date) => setRecordTime(date)}
                 style={{ width: '100%' }}
-                placeholder="请选择备案时间"
+                placeholder="请选择备案日期"
               />
             </div>
             {selectedRecord.drugAdminRecordTime && (
               <div style={{ marginTop: 16, padding: 8, background: '#f0f0f0', borderRadius: 4 }}>
-                <div style={{ fontSize: 12, color: '#666' }}>当前备案时间：</div>
-                <div>{formatDate(selectedRecord.drugAdminRecordTime)}</div>
+                <div style={{ fontSize: 12, color: '#666' }}>当前备案日期：</div>
+                <div>{formatDateOnly(selectedRecord.drugAdminRecordTime)}</div>
               </div>
             )}
           </div>

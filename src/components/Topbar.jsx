@@ -1,6 +1,5 @@
 import { useContext } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { AppDataContext } from "../context/AppDataContext";
 import { AuthContext } from "../context/AuthContext";
 import "./Topbar.css";
 
@@ -18,7 +17,6 @@ const titleMap = {
 
 function Topbar() {
   const location = useLocation();
-  const { summary } = useContext(AppDataContext);
   const { currentUser, logout, roleLabels } = useContext(AuthContext);
   const navigate = useNavigate();
   const getTitle = () => {
@@ -45,12 +43,8 @@ function Topbar() {
     <header className="topbar">
       <div>
         <div className="topbar__title">{title}</div>
-        <div className="topbar__subtitle">
-          系统为演示环境，数据来自本地 mock，可按文档完整功能逐步扩展。
-        </div>
       </div>
       <div className="topbar__actions">
-        <button className="btn ghost">导出报表</button>
         {currentUser ? (
           <>
             <div className="topbar__user small">

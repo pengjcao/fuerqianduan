@@ -15,11 +15,6 @@
   font-weight: 700;
 }
 
-.topbar__subtitle {
-  color: #6b7280;
-  font-size: 13px;
-}
-
 .topbar__actions {
   display: flex;
   align-items: center;
