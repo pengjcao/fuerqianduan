@@ -44,6 +44,12 @@ export const piRecordApi = {
   // 注意：不要手动设置 Content-Type，让浏览器自动设置（包含 boundary）
   submitPiInfo: (formData) => request.post("/user/upload/piinfo", formData),
 
+  getRejectedPiInfoForResubmit: (piInfoId) =>
+    request.get(`/user/upload/piinfo/resubmit/${piInfoId}`),
+
+  resubmitPiInfo: (piInfoId, formData) =>
+    request.post(`/user/upload/piinfo/resubmit/${piInfoId}`, formData),
+
   // 审批 PI（POST /user/shenpi）
   // 参数: { userId: string, pi_info_id: number, approve: boolean, comment?: string }
   review: (userId, pi_info_id, approve, comment) =>
@@ -115,19 +121,20 @@ export const keshiDepartmentApi = {
 // 专业组成员（研究团队）相关 API
 export const professionalGroupMemberApi = {
   // 新增研究团队成员（POST /user/professional-group-members/add-member）
-  // 参数: FormData (包含 departmentId, keshi, groupPath, personType, name, roles, resumeText, resumeFile, gcpCertFile, practiceCertFile, createBy)
+  // 参数: FormData (包含 departmentId, keshi, groupPath, personType, name, roles, resumeFile, gcpCertFile, practiceCertFile, createBy)
   addMember: (formData) =>
-    request.post("/user/professional-group-members/add-member", formData, {
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
-    }),
+    request.post("/user/professional-group-members/add-member", formData),
 
   // 查询研究团队成员（GET /user/professional-group-members/query-members?departmentId=xxx&groupPath=xxx）
   // 返回: Array<ProfessionalGroupMemberVO>
   queryMembers: (departmentId, groupPath) =>
     request.get("/user/professional-group-members/query-members", {
       params: { departmentId, groupPath },
+    }),
+
+  deleteMember: (id) =>
+    request.delete("/user/professional-group-members/delete", {
+      params: { id },
     }),
 };
 

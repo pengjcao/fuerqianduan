@@ -308,6 +308,8 @@ function Application() {
   // 审批日志相关状态
   const [approvalLogs, setApprovalLogs] = useState([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
+  const [resubmitPiInfoId, setResubmitPiInfoId] = useState(null);
+  const [loadingResubmitDetail, setLoadingResubmitDetail] = useState(false);
 
   const toggleType = (key) => {
     setTypes((prev) => {
@@ -342,6 +344,37 @@ function Application() {
     } else {
       message.info("当前文件暂不支持在线预览，仅记录名称和大小。");
     }
+  };
+
+  const getFileNameFromUrl = (url, fallback = "已上传文件") => {
+    if (!url) return fallback;
+    const name = String(url).split("?")[0].split("/").pop() || fallback;
+    try {
+      return decodeURIComponent(name);
+    } catch {
+      return name;
+    }
+  };
+
+  const createExistingFile = (url, fallback) => {
+    if (!url) return null;
+    return {
+      uid: `existing-${Math.random().toString(36).slice(2, 10)}`,
+      name: getFileNameFromUrl(url, fallback),
+      status: "done",
+      url,
+      existing: true,
+    };
+  };
+
+  const toUploadFileList = (file) => (file ? [file] : []);
+
+  const clearPiFile = (key) => {
+    setPiForm((prev) => ({ ...prev, [key]: null }));
+  };
+
+  const clearGroupFile = (key) => {
+    setGroupForm((prev) => ({ ...prev, [key]: null }));
   };
 
   // 处理证明材料中的多文件上传
@@ -419,12 +452,12 @@ function Application() {
       // 构建 FormData，匹配后端 PiInfoDTO 格式
       const formData = new FormData();
       const clinicalFileMappings = [
-        { frontKey: "approvalDoc", backendKey: "nmpaApproval" },
-        { frontKey: "authorizationTable", backendKey: "delegationTable" },
-        { frontKey: "trainingRecord", backendKey: "trainingRecord" },
-        { frontKey: "processFiles", backendKey: "processFiles" },
-        { frontKey: "centerSummary", backendKey: "completionFiles" },
-        { frontKey: "otherFiles", backendKey: "otherFiles" },
+        { frontKey: "approvalDoc", backendKey: "nmpaApproval", existingKey: "existingNmpaApprovalPaths" },
+        { frontKey: "authorizationTable", backendKey: "delegationTable", existingKey: "existingDelegationTablePaths" },
+        { frontKey: "trainingRecord", backendKey: "trainingRecord", existingKey: "existingTrainingRecordPaths" },
+        { frontKey: "processFiles", backendKey: "processFiles", existingKey: "existingProcessFilesPaths" },
+        { frontKey: "centerSummary", backendKey: "completionFiles", existingKey: "existingCompletionFilesPaths" },
+        { frontKey: "otherFiles", backendKey: "otherFiles", existingKey: "existingOtherFilesPaths" },
       ];
       const getFileObj = (fileObj) => {
         if (!fileObj) return null;
@@ -436,9 +469,17 @@ function Application() {
         }
         return null;
       };
+      const appendSingleFile = (fileObj, fileKey, existingKey) => {
+        const rawFile = getFileObj(fileObj);
+        if (rawFile) {
+          formData.append(fileKey, rawFile);
+        } else if (fileObj?.url) {
+          formData.append(existingKey, fileObj.url);
+        }
+      };
       const hasClinicalFiles = (proof) =>
         clinicalFileMappings.some(({ frontKey }) =>
-          (proof[frontKey] || []).some((file) => !!getFileObj(file))
+          (proof[frontKey] || []).length > 0
         );
       const activeTrialProofs = piForm.trialProofs.filter(
         (proof) => (proof.projectName || "").trim() || hasClinicalFiles(proof)
@@ -473,62 +514,53 @@ function Application() {
           formData.append("hospitalAreas", area);
         });
 
-        const selfReportFile = getFileObj(groupForm.selfReport);
-        if (selfReportFile) {
-          formData.append("selfAssessmentReport", selfReportFile);
-        }
+        appendSingleFile(
+          groupForm.selfReport,
+          "selfAssessmentReport",
+          "existingSelfAssessmentReportPath"
+        );
       }
 
       // PI相关文件字段
       // PI形象照
-      const piPhotoFile = getFileObj(piForm.piPhoto);
-      if (piPhotoFile) {
-        formData.append("piPhoto", piPhotoFile);
-      }
+      appendSingleFile(piForm.piPhoto, "piPhoto", "existingPiPhotoPath");
 
       // 身份证复印件
-      const idCardCopyFile = getFileObj(piForm.idCardCopy);
-      if (idCardCopyFile) {
-        formData.append("idCardCopy", idCardCopyFile);
-      }
+      appendSingleFile(piForm.idCardCopy, "idCardCopy", "existingIdCardCopyPath");
 
       // 高级职称证书
-      const seniorTitleCertFile = getFileObj(piForm.seniorTitleCertificate);
-      if (seniorTitleCertFile) {
-        formData.append("seniorTitleCertificate", seniorTitleCertFile);
-      }
+      appendSingleFile(
+        piForm.seniorTitleCertificate,
+        "seniorTitleCertificate",
+        "existingSeniorTitleCertificatePath"
+      );
 
       // 高级职称受聘证明文件
-      const seniorTitleAppointmentFile = getFileObj(
-        piForm.seniorTitleAppointment
+      appendSingleFile(
+        piForm.seniorTitleAppointment,
+        "seniorTitleAppointment",
+        "existingSeniorTitleAppointmentPath"
       );
-      if (seniorTitleAppointmentFile) {
-        formData.append("seniorTitleAppointment", seniorTitleAppointmentFile);
-      }
 
       // 签字版简历
-      const resumeFile = getFileObj(piForm.signedResume);
-      if (resumeFile) {
-        formData.append("signedResume", resumeFile);
-      }
+      appendSingleFile(piForm.signedResume, "signedResume", "existingSignedResumePath");
 
       // 资格证书
-      const qualificationFile = getFileObj(piForm.qualificationCertificate);
-      if (qualificationFile) {
-        formData.append("qualificationCertificate", qualificationFile);
-      }
+      appendSingleFile(
+        piForm.qualificationCertificate,
+        "qualificationCertificate",
+        "existingQualificationCertificatePath"
+      );
 
       // 执业证书
-      const practiceFile = getFileObj(piForm.practiceCertificate);
-      if (practiceFile) {
-        formData.append("practiceCertificate", practiceFile);
-      }
+      appendSingleFile(
+        piForm.practiceCertificate,
+        "practiceCertificate",
+        "existingPracticeCertificatePath"
+      );
 
       // GCP证书
-      const gcpFile = getFileObj(piForm.gcpCertificate);
-      if (gcpFile) {
-        formData.append("gcpCertificate", gcpFile);
-      }
+      appendSingleFile(piForm.gcpCertificate, "gcpCertificate", "existingGcpCertificatePath");
 
       // 参与临床试验证明材料（clinicalMaterials）
       activeTrialProofs.forEach((proof, index) => {
@@ -537,11 +569,13 @@ function Application() {
           proof.projectName || ""
         );
 
-        clinicalFileMappings.forEach(({ frontKey, backendKey }) => {
+        clinicalFileMappings.forEach(({ frontKey, backendKey, existingKey }) => {
           (proof[frontKey] || []).forEach((file) => {
             const rawFile = getFileObj(file);
             if (rawFile) {
               formData.append(`clinicalMaterials[${index}].${backendKey}`, rawFile);
+            } else if (file?.url) {
+              formData.append(`clinicalMaterials[${index}].${existingKey}`, file.url);
             }
           });
         });
@@ -549,7 +583,17 @@ function Application() {
 
       // 根据是否勾选"新增专业组"调用不同接口
       let response;
-      if (types.group) {
+      if (resubmitPiInfoId) {
+        response = await piRecordApi.resubmitPiInfo(resubmitPiInfoId, formData);
+        if (response && response.success) {
+          message.success("PI备案申请已重新提交");
+          setResubmitPiInfoId(null);
+          await fetchApprovalLogs();
+          setActiveTab("logs");
+          return;
+        }
+        throw new Error(response?.message || "重新提交失败");
+      } else if (types.group) {
         // 新增专业组（必须包含PI信息），调用 /zhuanyezu 接口
         response = await professionalGroupApi.submit(formData);
         if (response && response.success) {
@@ -761,6 +805,20 @@ function Application() {
     }
   };
 
+  const formatDateOnly = (timestamp) => {
+    if (!timestamp) return "未填写";
+    try {
+      const date = new Date(timestamp);
+      return date.toLocaleDateString("zh-CN", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      });
+    } catch {
+      return "未填写";
+    }
+  };
+
   // 角色名称映射
   const roleNameMap = {
     1: "研究者",
@@ -772,10 +830,162 @@ function Application() {
 
   // 状态名称映射
   const statusNameMap = {
-    APPROVE: { color: "green", text: "通过" },
+    APPROVE: { color: "green", text: "已同意" },
+    APPROVED: { color: "green", text: "审批已通过" },
+    RECORDED: { color: "blue", text: "已备案" },
     REJECT: { color: "red", text: "驳回" },
     REJECTED: { color: "red", text: "驳回" },
     PENDING_APPROVAL: { color: "orange", text: "待审核" },
+  };
+
+  const approvalNodeMap = {
+    1: "机构办秘书待审核",
+    2: "机构办主任待审核",
+    3: "机构主任待审核",
+    4: "机构主任已审核通过",
+  };
+
+  const isRejectStatus = (status) => ["REJECT", "REJECTED"].includes(String(status || "").toUpperCase());
+  const isApproveStatus = (status) => ["APPROVE", "APPROVED", "RECORDED"].includes(String(status || "").toUpperCase());
+
+  const getProgressStatusInfo = (record) => {
+    const status = String(record?.applyStatus || "").toUpperCase();
+    if (isRejectStatus(record?.applyStatus)) {
+      return { color: "red", text: "审批已驳回" };
+    }
+    if ((record?.currentStep || 0) === 4 || ["APPROVED", "RECORDED"].includes(status)) {
+      return { color: "green", text: "审批已通过" };
+    }
+    return { color: "orange", text: "审批中" };
+  };
+
+  const getProgressNodeText = (record) => {
+    if (isRejectStatus(record?.applyStatus)) {
+      return "审批已驳回，需重新提交";
+    }
+    return approvalNodeMap[record?.currentStep] || "未知节点";
+  };
+
+  const getRecordTimeTag = (record) => {
+    if ((record?.currentStep || 0) !== 4 && !record?.drugAdminRecordTime) {
+      return null;
+    }
+    if (record?.drugAdminRecordTime) {
+      return <Tag color="blue">备案日期：{formatDateOnly(record.drugAdminRecordTime)}</Tag>;
+    }
+    return <Tag color="orange">待机构办秘书填写备案日期</Tag>;
+  };
+
+  const getLogStepText = (record) => {
+    if (isRejectStatus(record?.applyStatus)) {
+      return "审批已驳回";
+    }
+    if (record?.role === 4 && isApproveStatus(record?.applyStatus)) {
+      return "审批已通过";
+    }
+    return approvalNodeMap[record?.currentStep] || "未知节点";
+  };
+
+  const getLogResultInfo = (record) => {
+    if (isRejectStatus(record?.applyStatus)) {
+      return { color: "red", text: "驳回" };
+    }
+    if (record?.role === 4 && isApproveStatus(record?.applyStatus)) {
+      return { color: "green", text: "整体通过" };
+    }
+    if (isApproveStatus(record?.applyStatus)) {
+      return { color: "green", text: "已同意，流转下一节点" };
+    }
+    return statusNameMap[record?.applyStatus] ||
+      statusNameMap[String(record?.applyStatus || "").toUpperCase()] || {
+        color: "default",
+        text: record?.applyStatus || "未知",
+      };
+  };
+
+  const splitTextList = (value) => {
+    if (!value) return [];
+    if (Array.isArray(value)) return value.filter(Boolean);
+    return String(value)
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  };
+
+  const toTrialTypeValue = (type) => {
+    if (type === "药物临床试验") return "drug";
+    if (type === "医疗器械临床试验") return "device";
+    return type;
+  };
+
+  const createExistingFileList = (urls, fallback) => {
+    if (!urls) return [];
+    const list = Array.isArray(urls) ? urls : [urls];
+    return list
+      .filter(Boolean)
+      .map((url, index) => createExistingFile(url, `${fallback}${index + 1}`))
+      .filter(Boolean);
+  };
+
+  const clinicalMaterialsToProofs = (materials = []) => {
+    if (!materials || materials.length === 0) {
+      return [];
+    }
+    return materials.map((material, index) => ({
+      id: `resubmit-proof-${material.id || index}-${Date.now()}`,
+      projectName: material.projectName || "",
+      approvalDoc: createExistingFileList(material.nmpaApprovalPaths, "国家药监局批件"),
+      authorizationTable: createExistingFileList(material.delegationTablePaths, "授权分工表"),
+      trainingRecord: createExistingFileList(material.trainingRecordPaths, "培训记录表"),
+      processFiles: createExistingFileList(material.processFilesPaths, "过程性文件"),
+      centerSummary: createExistingFileList(material.completionFilesPaths, "结题证明文件"),
+      otherFiles: createExistingFileList(material.otherFilesPaths, "其他证明材料"),
+    }));
+  };
+
+  const loadRejectedForResubmit = async (logGroup) => {
+    const piInfoId = logGroup?.piInfoId;
+    if (!piInfoId) return;
+    setLoadingResubmitDetail(true);
+    try {
+      const response = await piRecordApi.getRejectedPiInfoForResubmit(piInfoId);
+      if (!response?.success || !response.data) {
+        throw new Error(response?.message || "获取驳回申请详情失败");
+      }
+
+      const data = response.data;
+      const isGroupApplication =
+        Number(data.applyType) === 1 ||
+        Boolean(data.recordTypes || data.hospitalAreas || data.reportFilePath);
+      setTypes({ group: isGroupApplication, pi: true });
+      setGroupForm({
+        trialTypes: splitTextList(data.recordTypes).map(toTrialTypeValue),
+        specialty: data.professional || "",
+        campus: splitTextList(data.hospitalAreas),
+        selfReport: createExistingFile(data.reportFilePath, "专业组自评报告"),
+      });
+      setPiForm({
+        specialty: data.professional || "",
+        piPhoto: createExistingFile(data.piPhotoPath, "PI形象照"),
+        idCardCopy: createExistingFile(data.idCardCopyPath, "身份证复印件"),
+        seniorTitleCertificate: createExistingFile(data.seniorTitleCertificatePath, "高级职称证书"),
+        seniorTitleAppointment: createExistingFile(data.seniorTitleAppointmentPath, "高级职称受聘证明"),
+        signedResume: createExistingFile(data.signedResumePath, "签字版简历"),
+        qualificationCertificate: createExistingFile(data.qualificationCertificatePath, "资格证书"),
+        practiceCertificate: createExistingFile(data.practiceCertificatePath, "执业证书"),
+        gcpCertificate: createExistingFile(data.gcpCertificatePath, "GCP证书"),
+        expertise: data.shanchang || "",
+        trialProofs: clinicalMaterialsToProofs(data.clinicalMaterials),
+        noProofReason: data.clinicalReason || "",
+      });
+      setResubmitPiInfoId(data.piInfoId || piInfoId);
+      setActiveTab("pi");
+      message.success("已回填驳回申请，可修改后重新提交");
+    } catch (error) {
+      message.error(error?.message || "加载驳回申请失败");
+    } finally {
+      setLoadingResubmitDetail(false);
+    }
   };
 
   if (!isPi) {
@@ -920,6 +1130,7 @@ function Application() {
             <Checkbox
               checked={types.group}
               onChange={() => toggleType("group")}
+              disabled={!!resubmitPiInfoId}
               style={{ marginRight: 12 }}
             >
               新增专业组
@@ -933,7 +1144,7 @@ function Application() {
                 }
                 toggleType("pi");
               }}
-              disabled={types.group}
+              disabled={types.group || !!resubmitPiInfoId}
             >
               新增主要研究者（PI）
             </Checkbox>
@@ -948,10 +1159,23 @@ function Application() {
         items={[
           types.pi && {
             key: "pi",
-            label: types.group ? "新增专业组及PI" : "新增PI",
+            label: resubmitPiInfoId
+              ? "修改并重新提交"
+              : types.group
+              ? "新增专业组及PI"
+              : "新增PI",
             children: (
               <Card>
                 <Form layout="vertical" onFinish={submitForm}>
+                  {resubmitPiInfoId && (
+                    <Alert
+                      type="warning"
+                      showIcon
+                      message={`正在修改被驳回的 PI 备案申请（ID：${resubmitPiInfoId}）`}
+                      description="页面已回填上次提交的文字和文件。未重新上传的单文件材料会保留原文件；临床试验证明材料中删除的旧文件不会再随本次申请提交。"
+                      style={{ marginBottom: 16 }}
+                    />
+                  )}
                   {/* 如果勾选了"新增专业组"，显示专业组相关字段 */}
                   {types.group && (
                     <>
@@ -1026,6 +1250,11 @@ function Application() {
                           <Form.Item label="专业组自评报告（Word 文档上传）">
                             <Dragger
                               beforeUpload={handleFile(setGroupForm, "selfReport")}
+                              fileList={toUploadFileList(groupForm.selfReport)}
+                              onRemove={() => {
+                                clearGroupFile("selfReport");
+                                return true;
+                              }}
                               maxCount={1}
                               accept=".doc,.docx"
                               style={{ padding: 8, borderStyle: "dashed" }}
@@ -1085,6 +1314,11 @@ function Application() {
                       <Form.Item label="PI 形象照">
                         <Upload
                           beforeUpload={handleFile(setPiForm, "piPhoto")}
+                          fileList={toUploadFileList(piForm.piPhoto)}
+                          onRemove={() => {
+                            clearPiFile("piPhoto");
+                            return true;
+                          }}
                           maxCount={1}
                           accept="image/*"
                           listType="text"
@@ -1098,6 +1332,11 @@ function Application() {
                       <Form.Item label="身份证复印件">
                         <Upload
                           beforeUpload={handleFile(setPiForm, "idCardCopy")}
+                          fileList={toUploadFileList(piForm.idCardCopy)}
+                          onRemove={() => {
+                            clearPiFile("idCardCopy");
+                            return true;
+                          }}
                           maxCount={1}
                           accept=".pdf,.jpg,.jpeg,.png"
                           listType="text"
@@ -1114,6 +1353,11 @@ function Application() {
                             setPiForm,
                             "seniorTitleCertificate"
                           )}
+                          fileList={toUploadFileList(piForm.seniorTitleCertificate)}
+                          onRemove={() => {
+                            clearPiFile("seniorTitleCertificate");
+                            return true;
+                          }}
                           maxCount={1}
                           listType="text"
                           onPreview={handlePreview}
@@ -1129,6 +1373,11 @@ function Application() {
                             setPiForm,
                             "seniorTitleAppointment"
                           )}
+                          fileList={toUploadFileList(piForm.seniorTitleAppointment)}
+                          onRemove={() => {
+                            clearPiFile("seniorTitleAppointment");
+                            return true;
+                          }}
                           maxCount={1}
                           listType="text"
                           onPreview={handlePreview}
@@ -1141,6 +1390,11 @@ function Application() {
                       <Form.Item label="签字版简历">
                         <Upload
                           beforeUpload={handleFile(setPiForm, "signedResume")}
+                          fileList={toUploadFileList(piForm.signedResume)}
+                          onRemove={() => {
+                            clearPiFile("signedResume");
+                            return true;
+                          }}
                           maxCount={1}
                           listType="text"
                           onPreview={handlePreview}
@@ -1156,6 +1410,11 @@ function Application() {
                             setPiForm,
                             "qualificationCertificate"
                           )}
+                          fileList={toUploadFileList(piForm.qualificationCertificate)}
+                          onRemove={() => {
+                            clearPiFile("qualificationCertificate");
+                            return true;
+                          }}
                           maxCount={1}
                           listType="text"
                           onPreview={handlePreview}
@@ -1173,6 +1432,11 @@ function Application() {
                             setPiForm,
                             "practiceCertificate"
                           )}
+                          fileList={toUploadFileList(piForm.practiceCertificate)}
+                          onRemove={() => {
+                            clearPiFile("practiceCertificate");
+                            return true;
+                          }}
                           maxCount={1}
                           listType="text"
                           onPreview={handlePreview}
@@ -1185,6 +1449,11 @@ function Application() {
                       <Form.Item label="GCP 证书">
                         <Upload
                           beforeUpload={handleFile(setPiForm, "gcpCertificate")}
+                          fileList={toUploadFileList(piForm.gcpCertificate)}
+                          onRemove={() => {
+                            clearPiFile("gcpCertificate");
+                            return true;
+                          }}
                           maxCount={1}
                           listType="text"
                           onPreview={handlePreview}
@@ -1545,7 +1814,11 @@ function Application() {
 
                   <Form.Item>
                     <Button type="primary" htmlType="submit">
-                      {types.group ? "提交专业组及PI备案申请" : "提交PI备案申请"}
+                      {resubmitPiInfoId
+                        ? "重新提交PI备案申请"
+                        : types.group
+                        ? "提交专业组及PI备案申请"
+                        : "提交PI备案申请"}
                     </Button>
                   </Form.Item>
                   {toast && <p className="small">{toast}</p>}
@@ -1591,20 +1864,26 @@ function Application() {
                         key={logGroup.piInfoId || index}
                         title={`PI备案 ID: ${logGroup.piInfoId}`}
                         style={{ marginBottom: 16 }}
-                        extra={
-                          <Space>
-                            <Tag
-                              color={
-                                statusNameMap[logGroup.applyStatus]?.color ||
-                                "default"
-                              }
-                            >
-                              {statusNameMap[logGroup.applyStatus]?.text ||
-                                logGroup.applyStatus}
-                            </Tag>
-                            <span>当前步骤: {logGroup.currentStep}</span>
-                          </Space>
-                        }
+                        extra={(() => {
+                          const statusInfo = getProgressStatusInfo(logGroup);
+                          return (
+                            <Space wrap>
+                              <Tag color={statusInfo.color}>{statusInfo.text}</Tag>
+                              <span>当前节点：{getProgressNodeText(logGroup)}</span>
+                              {getRecordTimeTag(logGroup)}
+                              {isRejectStatus(logGroup.applyStatus) && (
+                                <Button
+                                  size="small"
+                                  type="primary"
+                                  loading={loadingResubmitDetail}
+                                  onClick={() => loadRejectedForResubmit(logGroup)}
+                                >
+                                  修改后重新提交
+                                </Button>
+                              )}
+                            </Space>
+                          );
+                        })()}
                       >
                         <Table
                           dataSource={logGroup.logs || []}
@@ -1635,23 +1914,19 @@ function Application() {
                               render: (role) => roleNameMap[role] || `角色${role}`,
                             },
                             {
-                              title: "步骤",
+                              title: "审批后节点",
                               dataIndex: "currentStep",
                               key: "currentStep",
-                              width: 80,
+                              width: 160,
+                              render: (_, record) => getLogStepText(record),
                             },
                             {
                               title: "审批结果",
                               dataIndex: "applyStatus",
                               key: "applyStatus",
-                              width: 100,
-                              render: (status) => {
-                                const statusInfo =
-                                  statusNameMap[status] ||
-                                  statusNameMap[status?.toUpperCase()] || {
-                                    color: "default",
-                                    text: status || "未知",
-                                  };
+                              width: 160,
+                              render: (_, record) => {
+                                const statusInfo = getLogResultInfo(record);
                                 return (
                                   <Tag color={statusInfo.color}>
                                     {statusInfo.text}

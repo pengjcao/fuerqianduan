@@ -667,12 +667,17 @@ function Home() {
                 const statusMap = {
                   PENDING_APPROVAL: { color: "orange", text: "待审核" },
                   APPROVED: { color: "green", text: "已通过" },
+                  APPROVE: { color: "green", text: "已通过" },
+                  RECORDED: { color: "blue", text: "已备案" },
                   REJECTED: { color: "red", text: "已驳回" },
+                  REJECT: { color: "red", text: "已驳回" },
                 };
-                const status = statusMap[selectedPi.applyStatus] || {
-                  color: "default",
-                  text: selectedPi.applyStatus || "未知",
-                };
+                const status = selectedPi.drugAdminRecordTime
+                  ? statusMap.RECORDED
+                  : statusMap[selectedPi.applyStatus] || {
+                      color: "default",
+                      text: selectedPi.applyStatus || "未知",
+                    };
                 return <Tag color={status.color}>{status.text}</Tag>;
               })()}
             </Descriptions.Item>

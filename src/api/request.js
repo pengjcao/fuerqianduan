@@ -25,7 +25,13 @@ request.interceptors.request.use(
     // 如果是 FormData，确保 Content-Type 没有被手动设置（让浏览器自动设置包含 boundary）
     if (config.data instanceof FormData) {
       // 删除可能存在的 Content-Type，让浏览器自动设置（包含 boundary）
-      delete config.headers["Content-Type"];
+      if (typeof config.headers?.delete === "function") {
+        config.headers.delete("Content-Type");
+        config.headers.delete("content-type");
+      } else if (config.headers) {
+        delete config.headers["Content-Type"];
+        delete config.headers["content-type"];
+      }
     }
 
     return config;

@@ -19,6 +19,8 @@ const roleNameMap = {
 const statusMap = {
   PENDING_APPROVAL: { color: "orange", text: "待审核" },
   APPROVED: { color: "green", text: "已通过" },
+  APPROVE: { color: "green", text: "已通过" },
+  RECORDED: { color: "blue", text: "已备案" },
   REJECTED: { color: "red", text: "已驳回" },
   REJECT: { color: "red", text: "已驳回" },
 };
@@ -153,15 +155,43 @@ function PiRecords() {
     return roleNumber === 2 && currentStep === 4;
   };
 
+  const getApplyStatusInfo = (record) => {
+    if (record?.drugAdminRecordTime) {
+      return statusMap.RECORDED;
+    }
+    if ((record?.currentStep || 0) === 4) {
+      return statusMap.APPROVED;
+    }
+
+    return statusMap[record?.applyStatus] || {
+      color: "default",
+      text: record?.applyStatus || "未知",
+    };
+  };
+
+  const getRecordTimeStatusTag = (record) => {
+    if (record?.drugAdminRecordTime) {
+      return <Tag color="blue">已填写备案日期</Tag>;
+    }
+    if ((record?.currentStep || 0) === 4) {
+      return <Tag color="orange">待填写备案日期</Tag>;
+    }
+    return <Tag color="default">未到备案环节</Tag>;
+  };
+
   const prioritizedPiRecords = (piRecords || [])
     .map((record, index) => ({
       record,
       index,
       needsReview: canReview(record),
+      needsRecordTime: canFillRecordTime(record) && !record.drugAdminRecordTime,
     }))
     .sort((a, b) => {
       if (a.needsReview !== b.needsReview) {
         return a.needsReview ? -1 : 1;
+      }
+      if (a.needsRecordTime !== b.needsRecordTime) {
+        return a.needsRecordTime ? -1 : 1;
       }
       return a.index - b.index;
     })
@@ -357,10 +387,7 @@ function PiRecords() {
       key: "applyStatus",
       width: 120,
       render: (_, record) => {
-        const status = statusMap[record.applyStatus] || {
-          color: "default",
-          text: record.applyStatus || "未知",
-        };
+        const status = getApplyStatusInfo(record);
         return <Tag color={status.color}>{status.text}</Tag>;
       },
     },
@@ -370,6 +397,12 @@ function PiRecords() {
       key: "currentStep",
       width: 100,
       render: (step) => step || 0,
+    },
+    {
+      title: "备案日期状态",
+      key: "recordTimeStatus",
+      width: 150,
+      render: (_, record) => getRecordTimeStatusTag(record),
     },
     {
       title: "提交时间",
@@ -509,10 +542,7 @@ function PiRecords() {
               </Descriptions.Item>
               <Descriptions.Item label="申请状态" span={1}>
                 {(() => {
-                  const status = statusMap[selectedRecord.applyStatus] || {
-                    color: "default",
-                    text: selectedRecord.applyStatus || "未知",
-                  };
+                  const status = getApplyStatusInfo(selectedRecord);
                   return <Tag color={status.color}>{status.text}</Tag>;
                 })()}
               </Descriptions.Item>
@@ -528,6 +558,9 @@ function PiRecords() {
                 ) : (
                   <span style={{ color: '#999' }}>未填写</span>
                 )}
+              </Descriptions.Item>
+              <Descriptions.Item label="备案日期状态" span={1}>
+                {getRecordTimeStatusTag(selectedRecord)}
               </Descriptions.Item>
               
               {/* 专业组备案信息 */}

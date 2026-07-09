@@ -36,9 +36,9 @@ export function AppDataProvider({ children }) {
         console.warn("已备案PI接口不存在，使用待审核列表过滤");
         const pendingResponse = await piRecordApi.getPendingList();
         if (pendingResponse.success) {
-          // 过滤出已备案的（applyStatus不是PENDING_APPROVAL的）
+          // 过滤出已备案的：必须已经填写备案日期。
           const approved = (pendingResponse.data || []).filter(
-            (pi) => pi.applyStatus && pi.applyStatus !== "PENDING_APPROVAL"
+            (pi) => Boolean(pi.drugAdminRecordTime)
           );
           setApprovedPis(approved);
           return;
@@ -199,4 +199,3 @@ export function AppDataProvider({ children }) {
     </AppDataContext.Provider>
   );
 }
-

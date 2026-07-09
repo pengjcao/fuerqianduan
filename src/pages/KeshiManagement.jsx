@@ -48,6 +48,12 @@ const { TextArea } = Input;
 const { Title, Text } = Typography;
 const { Dragger } = Upload;
 
+const createEmptyMemberUploadFiles = () => ({
+  resumeFile: [],
+  gcpCertFile: [],
+  practiceCertFile: [],
+});
+
 function KeshiManagement() {
   const { hasRole, currentUser } = useContext(AuthContext);
   const { id, groupId } = useParams();
@@ -66,6 +72,7 @@ function KeshiManagement() {
   const [memberSubmitting, setMemberSubmitting] = useState(false);
   const [groupModalVisible, setGroupModalVisible] = useState(false);
   const [memberModalVisible, setMemberModalVisible] = useState(false);
+  const [memberUploadFiles, setMemberUploadFiles] = useState(createEmptyMemberUploadFiles);
 
   // 审批者（可以创建科室）：管理员 + 机构办秘书/主任 + 机构主任
   const isApprover = hasRole(["admin", "secretary", "director", "chief"]);
@@ -260,6 +267,25 @@ function KeshiManagement() {
     groupForm.resetFields();
   };
 
+  const appendMemberUploadFile = (formData, key, fileList) => {
+    const uploadFile = Array.isArray(fileList) ? fileList[0] : fileList;
+    const rawFile = uploadFile?.originFileObj || uploadFile?.file || uploadFile;
+    if (rawFile && typeof Blob !== "undefined" && rawFile instanceof Blob) {
+      formData.append(key, rawFile, rawFile.name || uploadFile?.name || key);
+    }
+  };
+
+  const handleMemberUploadChange = (fieldName) => ({ fileList }) => {
+    setMemberUploadFiles((prev) => ({
+      ...prev,
+      [fieldName]: Array.isArray(fileList) ? fileList.slice(-1) : [],
+    }));
+  };
+
+  const resetMemberUploadFiles = () => {
+    setMemberUploadFiles(createEmptyMemberUploadFiles());
+  };
+
   // 新建研究团队成员
   const handleCreateMember = async (values) => {
     if (!selectedId || !selectedKeshi || !selectedGroup) {
@@ -288,44 +314,28 @@ function KeshiManagement() {
         });
       }
       
-      if (values.resumeText) {
-        formData.append("resumeText", values.resumeText);
-      }
-      
-      // 处理文件上传
-      if (values.resumeFile && Array.isArray(values.resumeFile) && values.resumeFile.length > 0) {
-        const file = values.resumeFile[0];
-        if (file.originFileObj) {
-          formData.append("resumeFile", file.originFileObj);
-        } else if (file instanceof File) {
-          formData.append("resumeFile", file);
-        }
-      }
-      
-      if (values.gcpCertFile && Array.isArray(values.gcpCertFile) && values.gcpCertFile.length > 0) {
-        const file = values.gcpCertFile[0];
-        if (file.originFileObj) {
-          formData.append("gcpCertFile", file.originFileObj);
-        } else if (file instanceof File) {
-          formData.append("gcpCertFile", file);
-        }
-      }
-      
-      if (values.practiceCertFile && Array.isArray(values.practiceCertFile) && values.practiceCertFile.length > 0) {
-        const file = values.practiceCertFile[0];
-        if (file.originFileObj) {
-          formData.append("practiceCertFile", file.originFileObj);
-        } else if (file instanceof File) {
-          formData.append("practiceCertFile", file);
-        }
-      }
+      appendMemberUploadFile(formData, "resumeFile", memberUploadFiles.resumeFile);
+      appendMemberUploadFile(formData, "gcpCertFile", memberUploadFiles.gcpCertFile);
+      appendMemberUploadFile(formData, "practiceCertFile", memberUploadFiles.practiceCertFile);
       
       formData.append("createBy", currentUser?.id || currentUser?.username || "");
+
+      if (import.meta.env.DEV) {
+        console.log("[ProfessionalGroupMember] FormData entries:");
+        for (const [key, value] of formData.entries()) {
+          if (value instanceof File) {
+            console.log(`${key}: [File] ${value.name}, ${value.size} bytes, ${value.type}`);
+          } else {
+            console.log(`${key}:`, value);
+          }
+        }
+      }
 
       const response = await professionalGroupMemberApi.addMember(formData);
       if (response.success) {
         message.success("添加研究团队成员成功");
         memberForm.resetFields();
+        resetMemberUploadFiles();
         setMemberModalVisible(false);
         await fetchTeamMembers();
       } else {
@@ -339,18 +349,45 @@ function KeshiManagement() {
     }
   };
 
+  const handleDeleteMember = (record) => {
+    if (!record?.id) return;
+    Modal.confirm({
+      title: "删除研究团队成员",
+      content: `确认删除成员「${record.name || record.id}」吗？该成员上传的简历文件、GCP证书、执业证书也会一并删除。`,
+      okText: "删除",
+      okButtonProps: { danger: true },
+      cancelText: "取消",
+      onOk: async () => {
+        try {
+          const response = await professionalGroupMemberApi.deleteMember(record.id);
+          if (response?.success) {
+            message.success("研究团队成员删除成功");
+            await fetchTeamMembers();
+          } else {
+            message.error(response?.message || "研究团队成员删除失败");
+          }
+        } catch (error) {
+          console.error("研究团队成员删除失败:", error);
+          message.error(error?.message || "研究团队成员删除失败，请重试");
+        }
+      },
+    });
+  };
+
   const openMemberModal = () => {
     if (!selectedId || !selectedKeshi || !selectedGroup) {
       message.warning("请先选择科室和专业组");
       return;
     }
     memberForm.resetFields();
+    resetMemberUploadFiles();
     setMemberModalVisible(true);
   };
 
   const closeMemberModal = () => {
     setMemberModalVisible(false);
     memberForm.resetFields();
+    resetMemberUploadFiles();
   };
 
   const handleMemberUploadPreview = (file) => {
@@ -585,35 +622,19 @@ function KeshiManagement() {
                           title: "简历",
                           key: "resume",
                           width: 260,
-                          render: (_, record) => {
-                            if (!record.resumeText && !record.resumeFileUrl) {
-                              return "-";
-                            }
-
-                            return (
-                              <Space direction="vertical" size={8} style={{ width: "100%" }}>
-                                {record.resumeText ? (
-                                  <Text ellipsis style={{ maxWidth: 240, display: "block" }}>
-                                    {record.resumeText}
-                                  </Text>
-                                ) : null}
-                                {record.resumeFileUrl
-                                  ? renderTeamFileList([
-                                      {
-                                        key: "resume",
-                                        label: "简历文件",
-                                        url: record.resumeFileUrl,
-                                      },
-                                    ])
-                                  : null}
-                              </Space>
-                            );
-                          },
+                          render: (_, record) =>
+                            renderTeamFileList([
+                              {
+                                key: "resume",
+                                label: "简历文件",
+                                url: record.resumeFileUrl,
+                              },
+                            ]),
                         },
                         {
-                          title: "证书",
-                          key: "certificates",
-                          width: 260,
+                          title: "GCP证书",
+                          key: "gcpCert",
+                          width: 220,
                           render: (_, record) =>
                             renderTeamFileList([
                               {
@@ -621,6 +642,14 @@ function KeshiManagement() {
                                 label: "GCP证书",
                                 url: record.gcpCertUrl,
                               },
+                            ]),
+                        },
+                        {
+                          title: "执业证书",
+                          key: "practiceCert",
+                          width: 220,
+                          render: (_, record) =>
+                            renderTeamFileList([
                               {
                                 key: "practice",
                                 label: "执业证书",
@@ -628,10 +657,27 @@ function KeshiManagement() {
                               },
                             ]),
                         },
+                        {
+                          title: "操作",
+                          key: "action",
+                          width: 100,
+                          fixed: "right",
+                          render: (_, record) => (
+                            <Button
+                              type="link"
+                              size="small"
+                              danger
+                              icon={<DeleteOutlined />}
+                              onClick={() => handleDeleteMember(record)}
+                            >
+                              删除
+                            </Button>
+                          ),
+                        },
                       ]}
                       rowKey="id"
                       loading={memberLoading}
-                      scroll={{ x: 1260 }}
+                      scroll={{ x: 1580 }}
                       pagination={{
                         pageSize: 10,
                         showSizeChanger: true,
@@ -811,7 +857,6 @@ function KeshiManagement() {
             academicPosition: "",
             talentTitle: "",
             roles: [],
-            resumeText: "",
           }}
         >
           <Form.Item label="当前科室">
@@ -878,30 +923,12 @@ function KeshiManagement() {
           </Form.Item>
 
           <Form.Item
-            label="简历文本"
-            name="resumeText"
-          >
-            <TextArea
-              rows={4}
-              placeholder="请输入简历文本（可选）"
-              showCount
-              maxLength={500}
-            />
-          </Form.Item>
-
-          <Form.Item
             label="简历文件"
-            name="resumeFile"
-            valuePropName="fileList"
-            getValueFromEvent={(e) => {
-              if (Array.isArray(e)) {
-                return e;
-              }
-              return e?.fileList || [];
-            }}
           >
             <Upload
               beforeUpload={() => false}
+              fileList={memberUploadFiles.resumeFile}
+              onChange={handleMemberUploadChange("resumeFile")}
               onPreview={handleMemberUploadPreview}
               showUploadList={{ showPreviewIcon: true, showRemoveIcon: true }}
               maxCount={1}
@@ -916,17 +943,11 @@ function KeshiManagement() {
 
           <Form.Item
             label="GCP证书"
-            name="gcpCertFile"
-            valuePropName="fileList"
-            getValueFromEvent={(e) => {
-              if (Array.isArray(e)) {
-                return e;
-              }
-              return e?.fileList || [];
-            }}
           >
             <Upload
               beforeUpload={() => false}
+              fileList={memberUploadFiles.gcpCertFile}
+              onChange={handleMemberUploadChange("gcpCertFile")}
               onPreview={handleMemberUploadPreview}
               showUploadList={{ showPreviewIcon: true, showRemoveIcon: true }}
               maxCount={1}
@@ -941,17 +962,11 @@ function KeshiManagement() {
 
           <Form.Item
             label="执业证书"
-            name="practiceCertFile"
-            valuePropName="fileList"
-            getValueFromEvent={(e) => {
-              if (Array.isArray(e)) {
-                return e;
-              }
-              return e?.fileList || [];
-            }}
           >
             <Upload
               beforeUpload={() => false}
+              fileList={memberUploadFiles.practiceCertFile}
+              onChange={handleMemberUploadChange("practiceCertFile")}
               onPreview={handleMemberUploadPreview}
               showUploadList={{ showPreviewIcon: true, showRemoveIcon: true }}
               maxCount={1}
@@ -1453,9 +1468,6 @@ function BasicConditionTab({ keshi, groupPath, currentUser }) {
                 <Col span={10}>
                   <Form.Item
                     name="bedYear"
-                    rules={[
-                      { type: "number", min: 1900, max: 2100, message: "请输入正确年份" },
-                    ]}
                   >
                     <Input
                       inputMode="numeric"
@@ -1467,9 +1479,6 @@ function BasicConditionTab({ keshi, groupPath, currentUser }) {
                 <Col span={14}>
                   <Form.Item
                     name="bedCount"
-                    rules={[
-                      { type: "number", min: 0, message: "床位数不能小于 0" },
-                    ]}
                   >
                     <Input
                       inputMode="numeric"
@@ -1488,9 +1497,6 @@ function BasicConditionTab({ keshi, groupPath, currentUser }) {
                 <Col span={10}>
                   <Form.Item
                     name="inpatientYear"
-                    rules={[
-                      { type: "number", min: 1900, max: 2100, message: "请输入正确年份" },
-                    ]}
                   >
                     <Input
                       inputMode="numeric"
@@ -1502,9 +1508,6 @@ function BasicConditionTab({ keshi, groupPath, currentUser }) {
                 <Col span={14}>
                   <Form.Item
                     name="inpatientCount"
-                    rules={[
-                      { type: "number", min: 0, message: "住院人数不能小于 0" },
-                    ]}
                   >
                     <Input
                       inputMode="numeric"
@@ -1523,9 +1526,6 @@ function BasicConditionTab({ keshi, groupPath, currentUser }) {
                 <Col span={10}>
                   <Form.Item
                     name="avgDailyOutpatientYear"
-                    rules={[
-                      { type: "number", min: 1900, max: 2100, message: "请输入正确年份" },
-                    ]}
                   >
                     <Input
                       inputMode="numeric"
@@ -1539,9 +1539,6 @@ function BasicConditionTab({ keshi, groupPath, currentUser }) {
                 <Col span={14}>
                   <Form.Item
                     name="avgDailyOutpatientCount"
-                    rules={[
-                      { type: "number", min: 0, message: "均日门急诊量不能小于 0" },
-                    ]}
                   >
                     <Input
                       inputMode="numeric"
